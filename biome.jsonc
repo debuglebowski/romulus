@@ -1,0 +1,133 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": [
+			// <>
+			"**/*",
+			"!src/**/*.css",
+			"!src/ui/_shadcn/*",
+			"!src/ui/_shadcn.lib/*",
+			"!src/ui/_shadcn.hooks/*"
+		]
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"bracketSpacing": true,
+		"bracketSameLine": false,
+		"indentWidth": 4,
+		"lineWidth": 150
+	},
+	"linter": {
+		"enabled": true,
+		"rules": {
+			"recommended": true,
+			"a11y": "off",
+			"complexity": {
+				"noForEach": "off",
+				"noBannedTypes": "off",
+				"noImportantStyles": "off",
+				"noUselessThisAlias": "off"
+			},
+			"correctness": {
+				"noUndeclaredVariables": "off",
+				"noUnusedVariables": "on",
+				"noUnusedFunctionParameters": "off",
+				"noUnusedImports": "error",
+				"useExhaustiveDependencies": "off", // Until biome has fixed the issue with useEffectEvent, then error
+				"noChildrenProp": "off",
+				"noInvalidPositionAtImportRule": "off"
+			},
+			"style": {
+				"noNonNullAssertion": "off",
+				"noParameterAssign": "off",
+				"useTemplate": "error",
+				"noUselessElse": "error",
+				"useNumberNamespace": "off",
+				"useBlockStatements": {
+					"level": "error",
+					"fix": "safe"
+				},
+				"useConsistentCurlyBraces": "error"
+			},
+			"suspicious": {
+				"useIterableCallbackReturn": "off",
+				"noRedeclare": "off",
+				"noExplicitAny": "off",
+				"noAssignInExpressions": "off",
+				"noConfusingVoidType": "off",
+				"noArrayIndexKey": "off",
+				"noPrototypeBuiltins": "warn",
+				"noEmptyInterface": "off",
+				"noUnknownAtRules": "off",
+				"noDoubleEquals": {
+					"level": "error",
+					"options": { "ignoreNull": false }
+				}
+			},
+			"security": {
+				"noGlobalEval": "error"
+			},
+			"nursery": {
+				"useSortedClasses": "off",
+				"noFloatingPromises": "off"
+			},
+			"performance": {
+				"noAccumulatingSpread": "off",
+				"noDelete": "off",
+				"noDynamicNamespaceImportAccess": "off"
+			}
+		}
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": {
+					"level": "on",
+					"options": {
+						"groups": [
+							{ "type": false, "source": ":NODE:" },
+							":BLANK_LINE:",
+							{ "type": false, "source": [":PACKAGE:", "!@normain/**"] },
+							":BLANK_LINE:",
+							{ "type": false, "source": "@normain/**" },
+							":BLANK_LINE:",
+							{ "type": false, "source": ":ALIAS:" },
+							":BLANK_LINE:",
+							{ "type": false, "source": ":PATH:" },
+							":BLANK_LINE:",
+							":NODE:",
+							[":PACKAGE:", "!@normain/**"],
+							"@normain/**",
+							":ALIAS:",
+							":PATH:"
+						]
+					}
+				}
+			}
+		}
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"jsxQuoteStyle": "single",
+			"semicolons": "always",
+			"trailingCommas": "all",
+			"arrowParentheses": "always"
+		}
+	},
+	"json": {
+		"formatter": {
+			"trailingCommas": "none"
+		},
+		"parser": {
+			"allowComments": true
+		}
+	}
+}
