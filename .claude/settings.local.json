@@ -4,7 +4,9 @@
       "Bash(cat:*)",
       "Bash(tree:*)",
       "Bash(npx tsc:*)",
-      "Bash(npx convex codegen:*)"
+      "Bash(npx convex codegen:*)",
+      "Bash(bun install:*)",
+      "Bash(find:*)"
     ]
   }
 }

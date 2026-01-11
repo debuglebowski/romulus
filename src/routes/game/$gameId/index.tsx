@@ -14,6 +14,7 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from '@/ui/_shadcn/dialog';
+import { HexMap } from '@/ui/components/hex-map';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -26,6 +27,7 @@ function GamePage() {
 	const { gameId } = Route.useParams();
 	const navigate = useNavigate();
 	const game = useQuery(api.games.get, { gameId: gameId as Id<'games'> });
+	const tiles = useQuery(api.tiles.getForGame, { gameId: gameId as Id<'games'> });
 	const user = useQuery(api.users.currentUser);
 	const abandon = useMutation(api.games.abandon);
 	const [dialogOpen, setDialogOpen] = useState(false);
@@ -104,9 +106,15 @@ function GamePage() {
 					</div>
 				</CardHeader>
 				<CardContent className='space-y-6'>
-					{/* Placeholder game area */}
-					<div className='flex h-64 items-center justify-center rounded-lg border-2 border-dashed'>
-						<p className='text-muted-foreground'>Game in progress - gameplay coming soon</p>
+					{/* Hex Map */}
+					<div className='rounded-lg border bg-gray-900'>
+						{tiles && tiles.length > 0 ? (
+							<HexMap tiles={tiles} players={game.players} />
+						) : (
+							<div className='flex h-64 items-center justify-center'>
+								<p className='text-muted-foreground'>Loading map...</p>
+							</div>
+						)}
 					</div>
 
 					{/* Player status */}

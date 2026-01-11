@@ -42,7 +42,19 @@ const schema = defineSchema({
 		),
 		startedAt: v.optional(v.number()),
 		finishedAt: v.optional(v.number()),
+		currentTick: v.optional(v.number()),
+		lastTickAt: v.optional(v.number()),
 	}).index('by_status', ['status']),
+
+	tiles: defineTable({
+		gameId: v.id('games'),
+		q: v.number(),
+		r: v.number(),
+		ownerId: v.optional(v.id('gamePlayers')),
+		type: v.union(v.literal('empty'), v.literal('city'), v.literal('capital')),
+	})
+		.index('by_gameId', ['gameId'])
+		.index('by_gameId_coords', ['gameId', 'q', 'r']),
 
 	gamePlayers: defineTable({
 		gameId: v.id('games'),

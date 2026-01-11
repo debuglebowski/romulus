@@ -13,6 +13,7 @@
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
 		"@convex-dev/auth": "^0.0.90",
+		"@fontsource-variable/cinzel": "^5.2.8",
 		"@fontsource-variable/figtree": "^5.2.10",
 		"@tabler/icons-react": "^3.36.0",
 		"@tailwindcss/vite": "^4.1.18",

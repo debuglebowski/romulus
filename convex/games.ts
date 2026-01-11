@@ -1,4 +1,5 @@
 import { v } from 'convex/values';
+import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
 import { mutation, query } from './_generated/server';
 import type { QueryCtx } from './_generated/server';
@@ -253,6 +254,18 @@ export const start = mutation({
 			status: 'inProgress',
 			startedAt: Date.now(),
 		});
+
+		// Generate map with player IDs in starting position order
+		const sortedPlayers = [...players].sort(
+			(a, b) => (positions[players.indexOf(a)] ?? 0) - (positions[players.indexOf(b)] ?? 0),
+		);
+		await ctx.runMutation(internal.tiles.generateMap, {
+			gameId: args.gameId,
+			playerIds: sortedPlayers.map((p) => p._id),
+		});
+
+		// Start tick system
+		await ctx.runMutation(internal.tick.startGameTick, { gameId: args.gameId });
 	},
 });
 
