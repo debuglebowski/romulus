@@ -1,11 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
-
-import { ComponentExample } from '@/ui/components/component-example';
+import { createFileRoute, Navigate } from '@tanstack/react-router';
 
 export const Route = createFileRoute('/')({
 	component: IndexPage,
 });
 
 function IndexPage() {
-	return <ComponentExample />;
+	return <Navigate to='/lobbies' />;
 }
