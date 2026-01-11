@@ -3,9 +3,7 @@ import { useMutation, useQuery } from 'convex/react';
 import { useState } from 'react';
 
 import { Button } from '@/ui/_shadcn/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/_shadcn/card';
 import { Input } from '@/ui/_shadcn/input';
-import { Label } from '@/ui/_shadcn/label';
 
 import { api } from '../../convex/_generated/api';
 
@@ -43,34 +41,32 @@ function SetupPage() {
 	};
 
 	return (
-		<div className='flex min-h-[calc(100vh-64px)] items-center justify-center p-4'>
-			<Card className='w-full max-w-md'>
-				<CardHeader>
-					<CardTitle>Welcome to Romulus</CardTitle>
-					<CardDescription>Choose a username to get started</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<form onSubmit={handleSubmit} className='space-y-4'>
-						<div className='space-y-2'>
-							<Label htmlFor='username'>Username</Label>
-							<Input
-								id='username'
-								type='text'
-								placeholder='Enter username'
-								value={username}
-								onChange={(e) => setUsernameValue(e.target.value)}
-								maxLength={20}
-								disabled={isSubmitting}
-								autoFocus
-							/>
-							{error && <p className='text-destructive text-sm'>{error}</p>}
-						</div>
-						<Button type='submit' className='w-full' disabled={isSubmitting || !username.trim()}>
-							{isSubmitting ? 'Setting up...' : 'Continue'}
-						</Button>
-					</form>
-				</CardContent>
-			</Card>
+		<div className='flex min-h-screen flex-col items-center justify-center gap-6 p-4'>
+			<h1 className='text-2xl uppercase tracking-wider'>Choose Your Name</h1>
+
+			<form onSubmit={handleSubmit} className='flex flex-col items-center gap-6'>
+				<Input
+					type='text'
+					placeholder='MaximusPrime_'
+					value={username}
+					onChange={(e) => setUsernameValue(e.target.value)}
+					maxLength={16}
+					disabled={isSubmitting}
+					autoFocus
+					className='w-72 text-center'
+				/>
+
+				<div className='space-y-1 text-center text-sm text-muted-foreground'>
+					<p>3-16 characters</p>
+					<p>Letters, numbers, underscores</p>
+				</div>
+
+				{error && <p className='text-destructive text-sm'>{error}</p>}
+
+				<Button type='submit' className='w-32' disabled={isSubmitting || !username.trim()}>
+					{isSubmitting ? '...' : 'CONTINUE'}
+				</Button>
+			</form>
 		</div>
 	);
 }

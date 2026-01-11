@@ -1,10 +1,9 @@
-import { IconCheck, IconCrown, IconDoorExit } from '@tabler/icons-react';
+import { IconArrowLeft } from '@tabler/icons-react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/ui/_shadcn/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/_shadcn/card';
 
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -21,12 +20,57 @@ function GameLobbyPage() {
 	const setReady = useMutation(api.games.setReady);
 	const leave = useMutation(api.games.leave);
 	const start = useMutation(api.games.start);
+	const heartbeat = useMutation(api.games.heartbeat);
 
 	const [countdown, setCountdown] = useState<number | null>(null);
 
+	// Ref to track current game status for cleanup without triggering effect re-runs
+	const gameStatusRef = useRef(game?.status);
+	gameStatusRef.current = game?.status;
+
 	const myPlayer = game?.players.find((p) => p.userId === user?._id);
+	const myPlayerId = myPlayer?._id;
 	const isHost = game?.hostId === user?._id;
 	const allReady = game?.players.every((p) => p.isReady) && (game?.players.length ?? 0) >= 2;
+
+	// Heartbeat - update lastSeen every 2 minutes
+	// Use myPlayerId (stable string) instead of myPlayer (unstable object reference)
+	// to prevent cascade effect where heartbeat updates trigger re-renders that trigger more heartbeats
+	useEffect(() => {
+		if (!myPlayerId) return;
+
+		// Initial heartbeat
+		heartbeat({ gameId: gameId as Id<'games'> });
+
+		const interval = setInterval(
+			() => {
+				heartbeat({ gameId: gameId as Id<'games'> });
+			},
+			2 * 60 * 1000,
+		);
+
+		return () => clearInterval(interval);
+	}, [gameId, myPlayerId, heartbeat]);
+
+	// Cleanup on unmount only (not on dependency changes)
+	// Uses ref to access current game status without causing effect re-runs
+	useEffect(() => {
+		const handleBeforeUnload = () => {
+			// Fire-and-forget leave on tab close
+			leave({ gameId: gameId as Id<'games'> });
+		};
+
+		window.addEventListener('beforeunload', handleBeforeUnload);
+
+		return () => {
+			window.removeEventListener('beforeunload', handleBeforeUnload);
+			// Only leave if game is still waiting (not starting/started)
+			// Use ref to get current status, not stale closure value
+			if (gameStatusRef.current === 'waiting') {
+				leave({ gameId: gameId as Id<'games'> });
+			}
+		};
+	}, [gameId, leave]); // Only re-run if gameId changes (different game)
 
 	// Countdown logic
 	useEffect(() => {
@@ -82,85 +126,75 @@ function GameLobbyPage() {
 
 	return (
 		<div className='mx-auto max-w-2xl p-4'>
-			<Card>
-				<CardHeader>
-					<div className='flex items-center justify-between'>
-						<div>
-							<CardTitle>{game.name}</CardTitle>
-							<CardDescription>
-								{game.players.length}/{game.maxPlayers} players
-							</CardDescription>
+			{/* Countdown overlay */}
+			{countdown !== null && (
+				<div className='fixed inset-0 z-50 flex flex-col items-center justify-center bg-background/95'>
+					<p className='mb-8 text-xl uppercase tracking-wider'>All Players Ready</p>
+					<div className='flex h-24 w-24 items-center justify-center border-2 border-primary text-5xl font-bold'>
+						{countdown}
+					</div>
+					<p className='mt-8 text-muted-foreground'>GAME STARTING...</p>
+				</div>
+			)}
+
+			<div className='mb-6 flex items-center justify-between'>
+				<button
+					type='button'
+					onClick={handleLeave}
+					className='flex items-center gap-1 text-muted-foreground hover:text-foreground'
+				>
+					<IconArrowLeft size={18} />
+					Leave
+				</button>
+				<h1 className='text-xl uppercase tracking-wider'>{game.name}</h1>
+				<div className='w-16' />
+			</div>
+
+			<div className='border'>
+				<div className='border-b p-3 text-center uppercase tracking-wider'>Players</div>
+
+				{/* Player list */}
+				{game.players.map((player) => (
+					<div key={player._id} className='flex items-center justify-between border-b p-3'>
+						<div className='flex items-center gap-2'>
+							{player.userId === game.hostId && <span className='text-primary'>★</span>}
+							<span>{player.username}</span>
+							{player.userId === game.hostId && (
+								<span className='text-muted-foreground'>(Host)</span>
+							)}
 						</div>
-						{countdown !== null && (
-							<div className='rounded-full bg-primary px-4 py-2 font-bold text-primary-foreground text-xl'>
-								{countdown}
-							</div>
-						)}
+						<span className={player.isReady ? 'text-green-500' : 'text-muted-foreground'}>
+							{player.isReady ? 'READY ●' : 'NOT READY ○'}
+						</span>
 					</div>
-				</CardHeader>
-				<CardContent className='space-y-4'>
-					{/* Player list */}
-					<div className='space-y-2'>
-						{game.players.map((player) => (
-							<div
-								key={player._id}
-								className='flex items-center justify-between rounded-lg border p-3'
-							>
-								<div className='flex items-center gap-3'>
-									<div
-										className='h-4 w-4 rounded-full'
-										style={{ backgroundColor: player.color }}
-									/>
-									<span className='font-medium'>{player.username}</span>
-									{player.userId === game.hostId && (
-										<IconCrown className='h-4 w-4 text-yellow-500' />
-									)}
-								</div>
-								{player.isReady && <IconCheck className='h-5 w-5 text-green-500' />}
-							</div>
-						))}
+				))}
 
-						{/* Empty slots */}
-						{Array.from({ length: game.maxPlayers - game.players.length }).map((_, i) => (
-							<div
-								key={`empty-${i}`}
-								className='flex items-center rounded-lg border border-dashed p-3 text-muted-foreground'
-							>
-								<span>Waiting for player...</span>
-							</div>
-						))}
+				{/* Empty slots */}
+				{Array.from({ length: game.maxPlayers - game.players.length }).map((_, i) => (
+					<div
+						key={`empty-${i}`}
+						className='border-b border-dashed p-3 text-center text-muted-foreground'
+					>
+						┄┄┄ Waiting for players ┄┄┄
 					</div>
+				))}
+			</div>
 
-					{/* Actions */}
-					<div className='flex gap-2'>
-						<Button variant='outline' onClick={handleLeave} className='gap-2'>
-							<IconDoorExit className='h-4 w-4' />
-							Leave
-						</Button>
-						<Button
-							onClick={handleToggleReady}
-							variant={myPlayer?.isReady ? 'secondary' : 'default'}
-							className='flex-1'
-						>
-							{myPlayer?.isReady ? 'Not Ready' : 'Ready'}
-						</Button>
-					</div>
+			<p className='mt-6 text-center text-muted-foreground'>
+				{game.players.length} / {game.maxPlayers} Players
+			</p>
 
-					{allReady && (
-						<p className='text-center text-muted-foreground text-sm'>
-							Game starting in {countdown}...
-						</p>
-					)}
-					{!allReady && game.players.length >= 2 && (
-						<p className='text-center text-muted-foreground text-sm'>
-							Waiting for all players to ready up
-						</p>
-					)}
-					{game.players.length < 2 && (
-						<p className='text-center text-muted-foreground text-sm'>Need at least 2 players</p>
-					)}
-				</CardContent>
-			</Card>
+			<div className='mt-6 flex justify-center'>
+				<Button onClick={handleToggleReady} className='w-32'>
+					{myPlayer?.isReady ? 'NOT READY' : 'READY'}
+				</Button>
+			</div>
+
+			<p className='mt-6 text-center text-muted-foreground text-sm'>
+				{game.players.length < 2
+					? 'Need at least 2 players'
+					: 'Game starts when all players ready'}
+			</p>
 		</div>
 	);
 }

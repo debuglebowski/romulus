@@ -1,6 +1,7 @@
 import { v } from 'convex/values';
 import { internalMutation, query } from './_generated/server';
-import { coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
+import { auth } from './auth';
+import { computeVisibleCoords, coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
 
 export const generateMap = internalMutation({
 	args: {
@@ -81,6 +82,42 @@ export const generateMap = internalMutation({
 				});
 			}
 		}
+
+		// Initialize fog memory for each player's starting visibility
+		const allTiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		const tileMap = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
+
+		for (let i = 0; i < playerCount; i++) {
+			const playerId = playerIds[i];
+			const pos = startingPositions[i];
+
+			// Get owned tiles for this player
+			const playerOwnedTiles = [
+				pos,
+				...getNeighbors(pos.q, pos.r).filter((n) => allHexes.some((h) => h.q === n.q && h.r === n.r)),
+			];
+
+			const visibleCoords = computeVisibleCoords(playerOwnedTiles);
+
+			for (const coord of visibleCoords) {
+				const tile = tileMap.get(coord);
+				if (tile) {
+					await ctx.db.insert('playerTileMemory', {
+						gameId,
+						playerId,
+						q: tile.q,
+						r: tile.r,
+						lastSeenOwnerId: tile.ownerId,
+						lastSeenType: tile.type,
+						lastSeenAt: 0,
+					});
+				}
+			}
+		}
 	},
 });
 
@@ -91,5 +128,107 @@ export const getForGame = query({
 			.query('tiles')
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
+	},
+});
+
+export const getVisibleForPlayer = query({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) throw new Error('Not authenticated');
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) throw new Error('Not in game');
+
+		const allTiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
+		const visibleCoords = computeVisibleCoords(ownedTiles);
+
+		const visible = [];
+		const notVisibleTiles = [];
+
+		for (const tile of allTiles) {
+			if (visibleCoords.has(coordKey(tile.q, tile.r))) {
+				visible.push(tile);
+			} else {
+				notVisibleTiles.push(tile);
+			}
+		}
+
+		const memories = await ctx.db
+			.query('playerTileMemory')
+			.withIndex('by_gameId_playerId', (q) => q.eq('gameId', gameId).eq('playerId', player._id))
+			.collect();
+
+		const memoryMap = new Map(memories.map((m) => [coordKey(m.q, m.r), m]));
+
+		const fogged = notVisibleTiles
+			.map((tile) => {
+				const memory = memoryMap.get(coordKey(tile.q, tile.r));
+				if (!memory) return null;
+				return {
+					q: tile.q,
+					r: tile.r,
+					lastSeenOwnerId: memory.lastSeenOwnerId,
+					lastSeenType: memory.lastSeenType,
+					lastSeenAt: memory.lastSeenAt,
+				};
+			})
+			.filter((t) => t !== null);
+
+		return { visible, fogged, playerId: player._id };
+	},
+});
+
+export const updatePlayerMemory = internalMutation({
+	args: {
+		gameId: v.id('games'),
+		playerId: v.id('gamePlayers'),
+		visibleTiles: v.array(
+			v.object({
+				q: v.number(),
+				r: v.number(),
+				ownerId: v.optional(v.id('gamePlayers')),
+				type: v.union(v.literal('empty'), v.literal('city'), v.literal('capital')),
+			}),
+		),
+		currentTick: v.number(),
+	},
+	handler: async (ctx, { gameId, playerId, visibleTiles, currentTick }) => {
+		for (const tile of visibleTiles) {
+			const existing = await ctx.db
+				.query('playerTileMemory')
+				.withIndex('by_gameId_playerId_coords', (q) =>
+					q.eq('gameId', gameId).eq('playerId', playerId).eq('q', tile.q).eq('r', tile.r),
+				)
+				.first();
+
+			if (existing) {
+				await ctx.db.patch(existing._id, {
+					lastSeenOwnerId: tile.ownerId,
+					lastSeenType: tile.type,
+					lastSeenAt: currentTick,
+				});
+			} else {
+				await ctx.db.insert('playerTileMemory', {
+					gameId,
+					playerId,
+					q: tile.q,
+					r: tile.r,
+					lastSeenOwnerId: tile.ownerId,
+					lastSeenType: tile.type,
+					lastSeenAt: currentTick,
+				});
+			}
+		}
 	},
 });

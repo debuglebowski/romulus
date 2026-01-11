@@ -1,8 +1,8 @@
 import { useAuthActions } from '@convex-dev/auth/react';
-import { IconLogout, IconSettings } from '@tabler/icons-react';
-import { createRootRoute, Link, Outlet, useNavigate } from '@tanstack/react-router';
+import { IconHome, IconLogout, IconSettings } from '@tabler/icons-react';
+import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useConvexAuth, useMutation, useQuery } from 'convex/react';
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 
 import { Avatar, AvatarFallback } from '@/ui/_shadcn/avatar';
 import {
@@ -15,6 +15,7 @@ import {
 	DropdownMenuTrigger,
 } from '@/ui/_shadcn/dropdown-menu';
 import { AuthForm } from '@/ui/components/auth-form';
+import { SettingsModal } from '@/ui/components/settings-modal';
 
 import { api } from '../../convex/_generated/api';
 
@@ -28,6 +29,26 @@ function RootLayout() {
 	const user = useQuery(api.users.currentUser);
 	const getOrCreate = useMutation(api.users.getOrCreate);
 	const navigate = useNavigate();
+	const location = useLocation();
+	const isTitle = location.pathname === '/';
+
+	// Settings modal controlled by ?settings search param
+	const searchParams = new URLSearchParams(location.search);
+	const settingsOpen = searchParams.get('settings') === 'open';
+
+	const setSettingsOpen = useCallback(
+		(open: boolean) => {
+			if (open) {
+				navigate({ search: { settings: 'open' } });
+			} else {
+				navigate({ search: {} });
+			}
+		},
+		[navigate],
+	);
+
+	// Check if we're in an active game (not lobby or results)
+	const isInGame = /^\/game\/[^/]+\/?$/.test(location.pathname);
 
 	// Initialize user on first visit
 	useEffect(() => {
@@ -66,15 +87,24 @@ function RootLayout() {
 
 	return (
 		<div className='min-h-screen'>
-			<header className='border-b bg-card'>
-				<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
-					<Link to='/lobbies' className='font-semibold text-lg hover:opacity-80'>
-						Romulus
+			{/* HUD corner (hidden when in active game - game has its own hamburger menu) */}
+			{!isTitle && !isInGame && (
+				<div className='fixed right-4 top-4 z-50 flex items-center gap-3'>
+					{/* Home button */}
+					<Link
+						to='/lobbies'
+						className='flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary bg-background text-primary shadow-[0_0_0_1px_var(--background),0_0_0_3px_var(--primary)] hover:shadow-[0_0_12px_var(--primary)] transition-shadow'
+					>
+						<IconHome size={16} />
 					</Link>
+
+					{/* User coin */}
 					<DropdownMenu>
-						<DropdownMenuTrigger className='cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring'>
-							<Avatar>
-								<AvatarFallback>{initials}</AvatarFallback>
+						<DropdownMenuTrigger className='cursor-pointer outline-none'>
+							<Avatar className='h-8 w-8 border-2 border-primary shadow-[0_0_0_1px_var(--background),0_0_0_3px_var(--primary)] hover:shadow-[0_0_12px_var(--primary)] transition-shadow'>
+								<AvatarFallback className='bg-background text-primary font-semibold'>
+									{initials}
+								</AvatarFallback>
 							</Avatar>
 						</DropdownMenuTrigger>
 						<DropdownMenuContent align='end' className='w-56'>
@@ -85,10 +115,10 @@ function RootLayout() {
 							</DropdownMenuGroup>
 							<DropdownMenuSeparator />
 							<DropdownMenuGroup>
-								<DropdownMenuItem onClick={() => navigate({ to: '/settings' })}>
-									<IconSettings />
-									Settings
-								</DropdownMenuItem>
+							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+								<IconSettings />
+								Settings
+							</DropdownMenuItem>
 								<DropdownMenuItem onClick={() => signOut()}>
 									<IconLogout />
 									Sign out
@@ -97,10 +127,13 @@ function RootLayout() {
 						</DropdownMenuContent>
 					</DropdownMenu>
 				</div>
-			</header>
+			)}
+
 			<main>
 				<Outlet />
 			</main>
+
+			<SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
 		</div>
 	);
 }

@@ -1,10 +1,90 @@
 import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import type { Id } from './_generated/dataModel';
-import { mutation, query } from './_generated/server';
-import type { QueryCtx } from './_generated/server';
+import { internalMutation, mutation, query } from './_generated/server';
+import type { MutationCtx, QueryCtx } from './_generated/server';
 import { auth } from './auth';
 import { getNextAvailableColor } from './lib/colors';
+
+// Helper to leave current game before joining/creating another
+async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
+	const existingPlayer = await ctx.db
+		.query('gamePlayers')
+		.withIndex('by_userId', (q) => q.eq('userId', userId))
+		.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
+		.first();
+
+	if (!existingPlayer) return;
+
+	const existingGame = await ctx.db.get(existingPlayer.gameId);
+	if (!existingGame) return;
+
+	if (existingGame.status === 'waiting') {
+		// Leave waiting game
+		await ctx.db.delete(existingPlayer._id);
+		if (existingGame.hostId === userId) {
+			const remainingPlayers = await ctx.db
+				.query('gamePlayers')
+				.withIndex('by_gameId', (q) => q.eq('gameId', existingPlayer.gameId))
+				.collect();
+			if (remainingPlayers.length === 0) {
+				await ctx.db.delete(existingPlayer.gameId);
+			} else {
+				const newHost = remainingPlayers.sort((a, b) => a.joinedAt - b.joinedAt)[0];
+				await ctx.db.patch(existingPlayer.gameId, { hostId: newHost.userId });
+			}
+		}
+	} else if (existingGame.status === 'inProgress' && !existingPlayer.eliminatedAt) {
+		// Forfeit in-progress game
+		const activePlayers = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', existingPlayer.gameId))
+			.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
+			.collect();
+		const finishPosition = activePlayers.length;
+
+		await ctx.db.patch(existingPlayer._id, {
+			eliminatedAt: Date.now(),
+			eliminationReason: 'forfeit',
+			finishPosition,
+			statTimeLasted: existingGame.startedAt ? Date.now() - existingGame.startedAt : 0,
+		});
+
+		// End game if only 1 player left
+		if (activePlayers.length === 2) {
+			const winner = activePlayers.find((p) => p._id !== existingPlayer._id);
+			if (winner) {
+				await ctx.db.patch(winner._id, {
+					finishPosition: 1,
+					statTimeLasted: existingGame.startedAt ? Date.now() - existingGame.startedAt : 0,
+				});
+				const winnerUser = await ctx.db.get(winner.userId);
+				if (winnerUser) {
+					await ctx.db.patch(winner.userId, {
+						statGamesPlayed: (winnerUser.statGamesPlayed ?? 0) + 1,
+						statWins: (winnerUser.statWins ?? 0) + 1,
+						statTimePlayed:
+							(winnerUser.statTimePlayed ?? 0) +
+							(existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
+					});
+				}
+				const loserUser = await ctx.db.get(userId);
+				if (loserUser) {
+					await ctx.db.patch(userId, {
+						statGamesPlayed: (loserUser.statGamesPlayed ?? 0) + 1,
+						statTimePlayed:
+							(loserUser.statTimePlayed ?? 0) +
+							(existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
+					});
+				}
+				await ctx.db.patch(existingPlayer.gameId, {
+					status: 'finished',
+					finishedAt: Date.now(),
+				});
+			}
+		}
+	}
+}
 
 async function getGameWithPlayers(ctx: QueryCtx, gameId: Id<'games'>) {
 	const game = await ctx.db.get(gameId);
@@ -101,6 +181,9 @@ export const create = mutation({
 		const userId = await auth.getUserId(ctx);
 		if (!userId) throw new Error('Not authenticated');
 
+		// Leave any existing game first
+		await leaveCurrentGame(ctx, userId);
+
 		const trimmedName = args.name.trim();
 		if (trimmedName.length === 0) throw new Error('Game name cannot be empty');
 		if (trimmedName.length > 50) throw new Error('Game name too long (max 50 chars)');
@@ -123,7 +206,11 @@ export const create = mutation({
 			isReady: false,
 			joinedAt: Date.now(),
 			pauseTimeUsed: 0,
+			lastSeen: Date.now(),
 		});
+
+		// Start lobby cleanup scheduler
+		await ctx.scheduler.runAfter(CLEANUP_INTERVAL, internal.games.lobbyCleanupTick, { gameId });
 
 		return gameId;
 	},
@@ -135,6 +222,17 @@ export const join = mutation({
 		const userId = await auth.getUserId(ctx);
 		if (!userId) throw new Error('Not authenticated');
 
+		// Check if already in this game - no-op
+		const existingPlayer = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_userId', (q) => q.eq('userId', userId))
+			.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
+			.first();
+		if (existingPlayer?.gameId === args.gameId) return;
+
+		// Leave any other game first
+		await leaveCurrentGame(ctx, userId);
+
 		const game = await ctx.db.get(args.gameId);
 		if (!game) throw new Error('Game not found');
 		if (game.status !== 'waiting') throw new Error('Game already started');
@@ -145,7 +243,6 @@ export const join = mutation({
 			.collect();
 
 		if (players.length >= game.maxPlayers) throw new Error('Game is full');
-		if (players.some((p) => p.userId === userId)) throw new Error('Already in game');
 
 		const takenColors = players.map((p) => p.color);
 
@@ -156,6 +253,7 @@ export const join = mutation({
 			isReady: false,
 			joinedAt: Date.now(),
 			pauseTimeUsed: 0,
+			lastSeen: Date.now(),
 		});
 	},
 });
@@ -167,7 +265,7 @@ export const leave = mutation({
 		if (!userId) throw new Error('Not authenticated');
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
+		if (!game) return; // Already gone
 		if (game.status !== 'waiting') throw new Error('Cannot leave started game');
 
 		const player = await ctx.db
@@ -176,7 +274,7 @@ export const leave = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
+		if (!player) return; // Already left
 
 		await ctx.db.delete(player._id);
 
@@ -194,6 +292,24 @@ export const leave = mutation({
 				const newHost = remainingPlayers.sort((a, b) => a.joinedAt - b.joinedAt)[0];
 				await ctx.db.patch(args.gameId, { hostId: newHost.userId });
 			}
+		}
+	},
+});
+
+export const heartbeat = mutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, args) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) return;
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (player) {
+			await ctx.db.patch(player._id, { lastSeen: Date.now() });
 		}
 	},
 });
@@ -263,6 +379,27 @@ export const start = mutation({
 			gameId: args.gameId,
 			playerIds: sortedPlayers.map((p) => p._id),
 		});
+
+		// Initialize player economy
+		for (const player of players) {
+			const capitalTile = await ctx.db
+				.query('tiles')
+				.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
+				.filter((q) =>
+					q.and(q.eq(q.field('ownerId'), player._id), q.eq(q.field('type'), 'capital')),
+				)
+				.first();
+
+			await ctx.db.patch(player._id, {
+				gold: 0,
+				population: 20,
+				populationAccumulator: 0,
+				labourRatio: 100,
+				militaryRatio: 0,
+				spyRatio: 0,
+				rallyPointTileId: capitalTile?._id,
+			});
+		}
 
 		// Start tick system
 		await ctx.runMutation(internal.tick.startGameTick, { gameId: args.gameId });
@@ -409,5 +546,134 @@ export const eliminate = mutation({
 				});
 			}
 		}
+	},
+});
+
+export const setRatios = mutation({
+	args: {
+		gameId: v.id('games'),
+		labourRatio: v.number(),
+		militaryRatio: v.number(),
+		spyRatio: v.number(),
+	},
+	handler: async (ctx, args) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) throw new Error('Not authenticated');
+
+		// Validate sum = 100
+		const sum = args.labourRatio + args.militaryRatio + args.spyRatio;
+		if (Math.abs(sum - 100) > 0.01) throw new Error('Ratios must sum to 100');
+
+		// Validate range 0-100
+		if (
+			args.labourRatio < 0 ||
+			args.labourRatio > 100 ||
+			args.militaryRatio < 0 ||
+			args.militaryRatio > 100 ||
+			args.spyRatio < 0 ||
+			args.spyRatio > 100
+		) {
+			throw new Error('Ratios must be 0-100');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) throw new Error('Not in game');
+
+		await ctx.db.patch(player._id, {
+			labourRatio: args.labourRatio,
+			militaryRatio: args.militaryRatio,
+			spyRatio: args.spyRatio,
+		});
+	},
+});
+
+export const getMyEconomy = query({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) return null;
+
+		const game = await ctx.db.get(gameId);
+		if (!game) return null;
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) return null;
+
+		// Calculate derived values
+		const labourers = Math.floor((player.population ?? 0) * ((player.labourRatio ?? 100) / 100));
+		const goldRate = labourers / 5;
+
+		const tiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('ownerId'), player._id))
+			.collect();
+
+		const cityCount = tiles.filter((t) => t.type === 'city').length;
+		const hasCapital = tiles.some((t) => t.type === 'capital');
+		const popCap = (hasCapital ? 50 : 0) + cityCount * 20;
+
+		return {
+			gold: player.gold ?? 0,
+			goldRate,
+			population: player.population ?? 0,
+			popCap,
+			labourRatio: player.labourRatio ?? 100,
+			militaryRatio: player.militaryRatio ?? 0,
+			spyRatio: player.spyRatio ?? 0,
+			startedAt: game.startedAt ?? Date.now(),
+		};
+	},
+});
+
+// Lobby cleanup - removes stale players who disconnected without leaving
+
+const STALE_TIMEOUT = 6 * 60 * 1000; // 6 minutes
+const CLEANUP_INTERVAL = 5 * 60 * 1000; // 5 minutes
+
+export const lobbyCleanupTick = internalMutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const game = await ctx.db.get(gameId);
+		if (!game || game.status !== 'waiting') return; // Stop if game started/deleted
+
+		const cutoff = Date.now() - STALE_TIMEOUT;
+		const players = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		for (const player of players) {
+			if (player.lastSeen && player.lastSeen < cutoff) {
+				await ctx.db.delete(player._id);
+
+				// Handle host transfer
+				if (game.hostId === player.userId) {
+					const remaining = players.filter(
+						(p) => p._id !== player._id && (!p.lastSeen || p.lastSeen >= cutoff),
+					);
+					if (remaining.length === 0) {
+						await ctx.db.delete(gameId);
+						return; // Game deleted, no need to reschedule
+					} else {
+						const newHost = remaining.sort((a, b) => a.joinedAt - b.joinedAt)[0];
+						await ctx.db.patch(gameId, { hostId: newHost.userId });
+					}
+				}
+			}
+		}
+
+		// Reschedule
+		await ctx.scheduler.runAfter(CLEANUP_INTERVAL, internal.games.lobbyCleanupTick, { gameId });
 	},
 });

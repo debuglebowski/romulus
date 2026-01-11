@@ -1,5 +1,23 @@
 import '@/ui/styles/globals.css';
 
+// Prevent Ctrl/Cmd + scroll wheel zoom
+document.addEventListener(
+	'wheel',
+	(e) => {
+		if (e.ctrlKey || e.metaKey) {
+			e.preventDefault();
+		}
+	},
+	{ passive: false },
+);
+
+// Prevent Ctrl/Cmd + +/-/0 zoom shortcuts
+document.addEventListener('keydown', (e) => {
+	if ((e.ctrlKey || e.metaKey) && ['+', '-', '=', '0'].includes(e.key)) {
+		e.preventDefault();
+	}
+});
+
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { ConvexReactClient } from 'convex/react';

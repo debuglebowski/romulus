@@ -1,11 +1,12 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { IconArrowLeft } from '@tabler/icons-react';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation } from 'convex/react';
 import { useState } from 'react';
 
 import { Button } from '@/ui/_shadcn/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/_shadcn/card';
 import { Input } from '@/ui/_shadcn/input';
 import { Label } from '@/ui/_shadcn/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/_shadcn/select';
 
 import { api } from '../../../convex/_generated/api';
 
@@ -13,13 +14,11 @@ export const Route = createFileRoute('/lobbies/new')({
 	component: NewGamePage,
 });
 
-const PLAYER_COUNTS = [2, 3, 4, 5, 6, 7, 8] as const;
-
 function NewGamePage() {
 	const navigate = useNavigate();
 	const create = useMutation(api.games.create);
 	const [name, setName] = useState('');
-	const [maxPlayers, setMaxPlayers] = useState(4);
+	const [maxPlayers, setMaxPlayers] = useState(6);
 	const [error, setError] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -40,64 +39,67 @@ function NewGamePage() {
 
 	return (
 		<div className='mx-auto max-w-md p-4'>
-			<Card>
-				<CardHeader>
-					<CardTitle>Create Game</CardTitle>
-					<CardDescription>Set up a new game lobby</CardDescription>
-				</CardHeader>
-				<CardContent>
-					<form onSubmit={handleSubmit} className='space-y-4'>
-						<div className='space-y-2'>
-							<Label htmlFor='name'>Game Name</Label>
-							<Input
-								id='name'
-								type='text'
-								placeholder='Enter game name'
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								maxLength={50}
-								disabled={isSubmitting}
-								autoFocus
-							/>
-						</div>
+			<div className='mb-6 flex items-center justify-between'>
+				<Link to='/lobbies' className='flex items-center gap-1 text-muted-foreground hover:text-foreground'>
+					<IconArrowLeft size={18} />
+					Back
+				</Link>
+				<h1 className='text-xl uppercase tracking-wider'>Create Game</h1>
+				<div className='w-16' />
+			</div>
 
-						<div className='space-y-2'>
-							<Label>Max Players</Label>
-							<div className='flex flex-wrap gap-2'>
-								{PLAYER_COUNTS.map((count) => (
-									<Button
-										key={count}
-										type='button'
-										variant={maxPlayers === count ? 'default' : 'outline'}
-										size='sm'
-										onClick={() => setMaxPlayers(count)}
-										disabled={isSubmitting}
-									>
-										{count}
-									</Button>
-								))}
-							</div>
-						</div>
+			<form onSubmit={handleSubmit} className='space-y-6'>
+				<div className='space-y-2'>
+					<Label htmlFor='name'>Game Name</Label>
+					<Input
+						id='name'
+						type='text'
+						placeholder='My Epic Battle'
+						value={name}
+						onChange={(e) => setName(e.target.value)}
+						maxLength={50}
+						disabled={isSubmitting}
+						autoFocus
+					/>
+				</div>
 
-						{error && <p className='text-destructive text-sm'>{error}</p>}
+				<div className='space-y-2'>
+					<Label>Max Players</Label>
+					<Select value={maxPlayers} onValueChange={(val) => setMaxPlayers(val as number)}>
+						<SelectTrigger className='w-20'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{[2, 3, 4, 5, 6].map((n) => (
+								<SelectItem key={n} value={n}>
+									{n}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+					<p className='text-muted-foreground text-sm'>2-6 players</p>
+				</div>
 
-						<div className='flex gap-2'>
-							<Button
-								type='button'
-								variant='outline'
-								className='flex-1'
-								onClick={() => navigate({ to: '/lobbies' })}
-								disabled={isSubmitting}
-							>
-								Cancel
-							</Button>
-							<Button type='submit' className='flex-1' disabled={isSubmitting || !name.trim()}>
-								{isSubmitting ? 'Creating...' : 'Create Game'}
-							</Button>
-						</div>
-					</form>
-				</CardContent>
-			</Card>
+				<div className='space-y-2'>
+					<Label>Map</Label>
+					<Select value='mediterranean' disabled>
+						<SelectTrigger className='w-full'>
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value='mediterranean'>Mediterranean</SelectItem>
+						</SelectContent>
+					</Select>
+				</div>
+
+				{error && <p className='text-destructive text-sm'>{error}</p>}
+
+				<div className='flex justify-center'>
+					<Button type='submit' className='w-32' disabled={isSubmitting || !name.trim()}>
+						{isSubmitting ? '...' : 'CREATE'}
+					</Button>
+				</div>
+			</form>
 		</div>
 	);
 }

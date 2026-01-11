@@ -64,6 +64,18 @@ const schema = defineSchema({
 		isReady: v.boolean(),
 		joinedAt: v.number(),
 		pauseTimeUsed: v.number(),
+		lastSeen: v.optional(v.number()),
+
+		// Economy (set on game start)
+		gold: v.optional(v.number()),
+		population: v.optional(v.number()),
+		populationAccumulator: v.optional(v.number()),
+		labourRatio: v.optional(v.number()),
+		militaryRatio: v.optional(v.number()),
+		spyRatio: v.optional(v.number()),
+		rallyPointTileId: v.optional(v.id('tiles')),
+		militaryAccumulator: v.optional(v.number()),
+
 		eliminatedAt: v.optional(v.number()),
 		eliminationReason: v.optional(
 			v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit')),
@@ -78,6 +90,21 @@ const schema = defineSchema({
 		.index('by_gameId', ['gameId'])
 		.index('by_userId', ['userId']),
 
+	armies: defineTable({
+		gameId: v.id('games'),
+		ownerId: v.id('gamePlayers'),
+		tileId: v.id('tiles'),
+		count: v.number(),
+		// Movement (null = stationary)
+		targetTileId: v.optional(v.id('tiles')),
+		path: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
+		departureTime: v.optional(v.number()),
+		arrivalTime: v.optional(v.number()),
+	})
+		.index('by_gameId', ['gameId'])
+		.index('by_tileId', ['tileId'])
+		.index('by_ownerId', ['ownerId']),
+
 	gameEvents: defineTable({
 		gameId: v.id('games'),
 		actorPlayerId: v.id('users'),
@@ -85,6 +112,18 @@ const schema = defineSchema({
 		type: v.string(),
 		data: v.any(),
 	}).index('by_gameId', ['gameId']),
+
+	playerTileMemory: defineTable({
+		gameId: v.id('games'),
+		playerId: v.id('gamePlayers'),
+		q: v.number(),
+		r: v.number(),
+		lastSeenOwnerId: v.optional(v.id('gamePlayers')),
+		lastSeenType: v.union(v.literal('empty'), v.literal('city'), v.literal('capital')),
+		lastSeenAt: v.number(),
+	})
+		.index('by_gameId_playerId', ['gameId', 'playerId'])
+		.index('by_gameId_playerId_coords', ['gameId', 'playerId', 'q', 'r']),
 });
 
 export default schema;

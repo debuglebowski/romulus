@@ -6,7 +6,18 @@
       "Bash(npx tsc:*)",
       "Bash(npx convex codegen:*)",
       "Bash(bun install:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(bunx convex dev:*)",
+      "Bash(grep:*)",
+      "mcp__ide__getDiagnostics",
+      "mcp__convex__status",
+      "mcp__convex__logs",
+      "Bash(git log:*)",
+      "Bash(npx convex dev:*)",
+      "mcp__convex__data",
+      "mcp__convex__run",
+      "mcp__convex__runOneoffQuery"
     ]
   }
 }

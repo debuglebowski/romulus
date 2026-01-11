@@ -1,11 +1,12 @@
-import { IconPlus, IconUsers } from '@tabler/icons-react';
+import { IconArrowLeft, IconRefresh } from '@tabler/icons-react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 
-import { Button, buttonVariants } from '@/ui/_shadcn/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/_shadcn/card';
+import { Button } from '@/ui/_shadcn/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/ui/_shadcn/table';
 
 import { api } from '../../../convex/_generated/api';
+
 import type { Id } from '../../../convex/_generated/dataModel';
 
 export const Route = createFileRoute('/lobbies/')({
@@ -36,50 +37,71 @@ function LobbiesPage() {
 	return (
 		<div className='mx-auto max-w-4xl p-4'>
 			<div className='mb-6 flex items-center justify-between'>
-				<h2 className='font-semibold text-2xl'>Game Lobbies</h2>
-				<Link to='/lobbies/new' className={buttonVariants()}>
-					<IconPlus className='mr-2 h-4 w-4' />
-					Create Game
+				<Link to='/' className='flex items-center gap-1 text-muted-foreground hover:text-foreground'>
+					<IconArrowLeft size={18} />
+					Back
 				</Link>
+				<h1 className='text-xl uppercase tracking-wider'>Find a Game</h1>
+				<div className='w-16' />
 			</div>
 
 			{games === undefined ? (
 				<div className='py-8 text-center text-muted-foreground'>Loading...</div>
 			) : games.length === 0 ? (
-				<Card>
-					<CardContent className='py-8 text-center text-muted-foreground'>
-						No games available. Create one to get started!
-					</CardContent>
-				</Card>
+				<div className='border py-8 text-center text-muted-foreground'>No games available. Create one to get started!</div>
 			) : (
-				<div className='grid gap-4 sm:grid-cols-2'>
-					{games.map((game) => (
-						<Card key={game._id} className='transition-shadow hover:shadow-md'>
-							<CardHeader className='pb-2'>
-								<CardTitle className='text-lg'>{game.name}</CardTitle>
-								<CardDescription>Hosted by {game.hostUsername}</CardDescription>
-							</CardHeader>
-							<CardContent>
-								<div className='flex items-center justify-between'>
-									<div className='flex items-center gap-1 text-muted-foreground text-sm'>
-										<IconUsers className='h-4 w-4' />
-										<span>
-											{game.playerCount}/{game.maxPlayers}
-										</span>
-									</div>
-									<Button
-										size='sm'
-										onClick={() => handleJoin(game._id)}
-										disabled={game.playerCount >= game.maxPlayers}
+				<div className='border'>
+					<Table>
+						<TableHeader>
+							<TableRow>
+								<TableHead className='uppercase tracking-wide'>Game Name</TableHead>
+								<TableHead className='uppercase tracking-wide'>Host</TableHead>
+								<TableHead className='uppercase tracking-wide'>Players</TableHead>
+								<TableHead className='uppercase tracking-wide'>Status</TableHead>
+							</TableRow>
+						</TableHeader>
+						<TableBody>
+							{games.map((game) => {
+								const isFull = game.playerCount >= game.maxPlayers;
+								return (
+									<TableRow
+										key={game._id}
+										onClick={isFull ? undefined : () => handleJoin(game._id)}
+										className={isFull ? 'opacity-50' : 'cursor-pointer hover:bg-primary/10'}
 									>
-										{game.playerCount >= game.maxPlayers ? 'Full' : 'Join'}
-									</Button>
-								</div>
-							</CardContent>
-						</Card>
-					))}
+										<TableCell>{game.name}</TableCell>
+										<TableCell>{game.hostUsername}</TableCell>
+										<TableCell>
+											{game.playerCount}/{game.maxPlayers}
+										</TableCell>
+										<TableCell>{isFull ? 'Full' : 'Waiting'}</TableCell>
+									</TableRow>
+								);
+							})}
+						</TableBody>
+					</Table>
 				</div>
 			)}
+
+			<div className='mt-8 flex justify-center'>
+				<Link to='/lobbies/new'>
+					<Button className='w-32'>CREATE GAME</Button>
+				</Link>
+			</div>
+
+			<div className='mt-6 flex justify-center'>
+				<Button
+					variant='ghost'
+					size='sm'
+					onClick={() => {
+						/* Convex auto-refreshes, but this is for UX */
+					}}
+					className='text-muted-foreground'
+				>
+					<IconRefresh size={16} className='mr-1' />
+					Refresh
+				</Button>
+			</div>
 		</div>
 	);
 }

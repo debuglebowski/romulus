@@ -25,7 +25,7 @@ function Slider({
 
   return (
     <SliderPrimitive.Root
-      className="data-horizontal:w-full data-vertical:h-full"
+      className="w-full"
       data-slot="slider"
       defaultValue={defaultValue}
       value={value}
@@ -36,17 +36,17 @@ function Slider({
     >
       <SliderPrimitive.Control
         className={cn(
-          "data-vertical:min-h-40 relative flex w-full touch-none items-center select-none data-disabled:opacity-50 data-vertical:h-full data-vertical:w-auto data-vertical:flex-col",
+          "relative flex w-full touch-none items-center select-none disabled:opacity-50",
           className
         )}
       >
         <SliderPrimitive.Track
           data-slot="slider-track"
-          className="bg-muted rounded-full data-horizontal:h-1 data-horizontal:w-full data-vertical:h-full data-vertical:w-1 relative overflow-hidden select-none"
+          className="bg-gray-500 rounded-full h-1 w-full relative overflow-hidden select-none"
         >
           <SliderPrimitive.Indicator
             data-slot="slider-range"
-            className="bg-primary select-none data-horizontal:h-full data-vertical:w-full"
+            className="bg-primary select-none h-full"
           />
         </SliderPrimitive.Track>
         {Array.from({ length: _values.length }, (_, index) => (
