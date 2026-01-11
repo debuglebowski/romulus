@@ -45,7 +45,6 @@ export interface ArmyData {
 	_id: string;
 	ownerId: string;
 	tileId: string;
-	count: number;
 	currentQ: number;
 	currentR: number;
 	isOwn: boolean;
@@ -53,6 +52,12 @@ export interface ArmyData {
 	targetTileId?: string;
 	departureTime?: number;
 	arrivalTime?: number;
+	// Unit stats (computed from units table)
+	unitCount: number;
+	totalHp: number;
+	averageHp: number;
+	averageHpPercent: number;
+	isInCombat: boolean;
 }
 
 interface HexMapProps {
@@ -60,6 +65,7 @@ interface HexMapProps {
 	players: Player[];
 	currentPlayerId: string;
 	armies?: ArmyData[];
+	combatTileIds?: string[];
 	selectedTileId?: string;
 	selectedArmyId?: string;
 	rallyPointTileId?: string;
@@ -78,6 +84,7 @@ export function HexMap({
 	tiles,
 	players,
 	armies = [],
+	combatTileIds = [],
 	selectedTileId,
 	selectedArmyId,
 	rallyPointTileId,
@@ -86,6 +93,7 @@ export function HexMap({
 	onArmyClick,
 	onBackgroundClick,
 }: HexMapProps) {
+	const combatTileSet = useMemo(() => new Set(combatTileIds), [combatTileIds]);
 	const svgRef = useRef<SVGSVGElement>(null);
 	const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
 	const [isDragging, setIsDragging] = useState(false);
@@ -367,11 +375,18 @@ export function HexMap({
 							0%, 100% { opacity: 1; stroke-width: 2; }
 							50% { opacity: 0.4; stroke-width: 3; }
 						}
+						@keyframes combat-pulse {
+							0%, 100% { stroke: #ef4444; stroke-width: 2; }
+							50% { stroke: #fbbf24; stroke-width: 3; }
+						}
 						.animate-shield-pulse {
 							animation: shield-pulse 1s ease-in-out infinite;
 						}
 						.animate-destination-pulse {
 							animation: destination-pulse 1.5s ease-in-out infinite;
+						}
+						.animate-combat-pulse {
+							animation: combat-pulse 0.8s ease-in-out infinite;
 						}
 					`}
 				</style>
@@ -465,6 +480,24 @@ export function HexMap({
 				);
 			})}
 
+			{/* Combat indicators - pulsing ring around tiles with combat */}
+			{tiles.map((tile) => {
+				if (!combatTileSet.has(tile._id)) {
+					return null;
+				}
+				const { x, y } = axialToPixel(tile.q, tile.r);
+				return (
+					<polygon
+						key={`combat-${tile._id}`}
+						points={hexPoints(x, y)}
+						fill='none'
+						stroke='#ef4444'
+						strokeWidth={2}
+						className='animate-combat-pulse'
+					/>
+				);
+			})}
+
 			{/* Selection ring - rendered after all tiles to be on top */}
 			{selectedTileId &&
 				(() => {
@@ -511,17 +544,42 @@ export function HexMap({
 				// Shield width is 10px, so offset by (shieldWidth + gap) to prevent overlap
 				const offsetX = teamCount > 1 ? (teamIndex - (teamCount - 1) / 2) * 10.2 : 0;
 
-				const totalCount = coordArmies.reduce((sum, a) => sum + a.count, 0);
+				const totalCount = coordArmies.reduce((sum, a) => sum + a.unitCount, 0);
+				const totalHp = coordArmies.reduce((sum, a) => sum + a.totalHp, 0);
+				const avgHpPercent = totalCount > 0 ? (totalHp / (totalCount * 100)) * 100 : 100;
 				const ownerColor = playerColorMap.get(ownerId) || '#888';
+				const isInCombat = coordArmies.some((a) => a.isInCombat);
 
 				return (
 					<g key={`army-${key}`} style={{ pointerEvents: 'none' }}>
 						{/* Shield filled with team color */}
-						<IconShield x={x - 5 + offsetX} y={y + 7} width={10} height={10} stroke='#000' strokeWidth={1} fill={ownerColor} />
+						<IconShield
+							x={x - 5 + offsetX}
+							y={y + 7}
+							width={10}
+							height={10}
+							stroke={isInCombat ? '#ef4444' : '#000'}
+							strokeWidth={isInCombat ? 1.5 : 1}
+							fill={ownerColor}
+						/>
 						{/* Count inside shield */}
 						<text x={x + offsetX} y={y + 13} textAnchor='middle' dominantBaseline='middle' fontSize={4} fontWeight='bold' fill='#fff'>
 							{totalCount}
 						</text>
+						{/* HP bar (only show if damaged) */}
+						{avgHpPercent < 100 && (
+							<g>
+								<rect x={x - 6 + offsetX} y={y + 18} width={12} height={2} fill='#374151' rx={1} />
+								<rect
+									x={x - 6 + offsetX}
+									y={y + 18}
+									width={Math.max(0, (12 * avgHpPercent) / 100)}
+									height={2}
+									fill={avgHpPercent > 50 ? '#22c55e' : avgHpPercent > 25 ? '#f59e0b' : '#ef4444'}
+									rx={1}
+								/>
+							</g>
+						)}
 					</g>
 				);
 			})}
@@ -531,6 +589,7 @@ export function HexMap({
 				const { x, y } = getMovingArmyPosition(army);
 				const isSelected = army._id === selectedArmyId;
 				const ownerColor = playerColorMap.get(army.ownerId) || '#888';
+				const avgHpPercent = army.averageHpPercent;
 
 				return (
 					<g
@@ -557,8 +616,22 @@ export function HexMap({
 						/>
 						{/* Count inside shield */}
 						<text x={x} y={y + 13} textAnchor='middle' dominantBaseline='middle' fontSize={4} fontWeight='bold' fill='#fff'>
-							{army.count}
+							{army.unitCount}
 						</text>
+						{/* HP bar (only show if damaged) */}
+						{avgHpPercent < 100 && (
+							<g>
+								<rect x={x - 6} y={y + 18} width={12} height={2} fill='#374151' rx={1} />
+								<rect
+									x={x - 6}
+									y={y + 18}
+									width={Math.max(0, (12 * avgHpPercent) / 100)}
+									height={2}
+									fill={avgHpPercent > 50 ? '#22c55e' : avgHpPercent > 25 ? '#f59e0b' : '#ef4444'}
+									rx={1}
+								/>
+							</g>
+						)}
 					</g>
 				);
 			})}

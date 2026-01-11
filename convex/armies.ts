@@ -2,29 +2,89 @@ import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
 import { auth } from './auth';
-import { computeVisibleCoords, coordKey, findPath } from './lib/hex';
+import { computeVisibleCoords, coordKey, findPath, getNeighbors } from './lib/hex';
 
 import type { Id } from './_generated/dataModel';
 
 const TRAVEL_TIME_PER_HEX = 10000; // 10 seconds per hex
+const UNIT_BASE_HP = 100;
 
 export const getForGame = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
-		return ctx.db
+		const armies = await ctx.db
 			.query('armies')
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
+
+		const units = await ctx.db
+			.query('units')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		// Build unit counts per army
+		const unitsByArmy = new Map<string, typeof units>();
+		for (const unit of units) {
+			const armyUnits = unitsByArmy.get(unit.armyId) ?? [];
+			armyUnits.push(unit);
+			unitsByArmy.set(unit.armyId, armyUnits);
+		}
+
+		return armies.map((army) => {
+			const armyUnits = unitsByArmy.get(army._id) ?? [];
+			const unitCount = armyUnits.length;
+			const totalHp = armyUnits.reduce((sum, u) => sum + u.hp, 0);
+			const averageHp = unitCount > 0 ? totalHp / unitCount : 0;
+
+			return {
+				...army,
+				unitCount,
+				totalHp,
+				averageHp,
+			};
+		});
 	},
 });
 
 export const getForPlayer = query({
 	args: { gamePlayerId: v.id('gamePlayers') },
 	handler: async (ctx, { gamePlayerId }) => {
-		return ctx.db
+		const armies = await ctx.db
 			.query('armies')
 			.withIndex('by_ownerId', (q) => q.eq('ownerId', gamePlayerId))
 			.collect();
+
+		if (armies.length === 0) {
+			return [];
+		}
+
+		const gameId = armies[0].gameId;
+		const units = await ctx.db
+			.query('units')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		// Build unit counts per army
+		const unitsByArmy = new Map<string, typeof units>();
+		for (const unit of units) {
+			const armyUnits = unitsByArmy.get(unit.armyId) ?? [];
+			armyUnits.push(unit);
+			unitsByArmy.set(unit.armyId, armyUnits);
+		}
+
+		return armies.map((army) => {
+			const armyUnits = unitsByArmy.get(army._id) ?? [];
+			const unitCount = armyUnits.length;
+			const totalHp = armyUnits.reduce((sum, u) => sum + u.hp, 0);
+			const averageHp = unitCount > 0 ? totalHp / unitCount : 0;
+
+			return {
+				...army,
+				unitCount,
+				totalHp,
+				averageHp,
+			};
+		});
 	},
 });
 
@@ -32,9 +92,9 @@ export const moveArmy = mutation({
 	args: {
 		armyId: v.id('armies'),
 		targetTileId: v.id('tiles'),
-		count: v.optional(v.number()),
+		unitCount: v.optional(v.number()),
 	},
-	handler: async (ctx, { armyId, targetTileId, count }) => {
+	handler: async (ctx, { armyId, targetTileId, unitCount: requestedCount }) => {
 		const userId = await auth.getUserId(ctx);
 		if (!userId) {
 			throw new Error('Not authenticated');
@@ -48,6 +108,17 @@ export const moveArmy = mutation({
 		const player = await ctx.db.get(army.ownerId);
 		if (!player || player.userId !== userId) {
 			throw new Error('Not your army');
+		}
+
+		// Get army's units
+		const armyUnits = await ctx.db
+			.query('units')
+			.withIndex('by_armyId', (q) => q.eq('armyId', armyId))
+			.collect();
+
+		const totalUnits = armyUnits.length;
+		if (totalUnits === 0) {
+			throw new Error('Army has no units');
 		}
 
 		const currentTile = await ctx.db.get(army.tileId);
@@ -65,11 +136,11 @@ export const moveArmy = mutation({
 		}
 
 		// Validate count
-		const unitsToMove = count ?? army.count;
+		const unitsToMove = requestedCount ?? totalUnits;
 		if (unitsToMove < 1) {
 			throw new Error('Must move at least 1 unit');
 		}
-		if (unitsToMove > army.count) {
+		if (unitsToMove > totalUnits) {
 			throw new Error('Not enough units');
 		}
 
@@ -104,22 +175,22 @@ export const moveArmy = mutation({
 		const now = Date.now();
 		const travelTime = path.length * TRAVEL_TIME_PER_HEX;
 
-		if (unitsToMove < army.count) {
-			// Split the army: reduce original, create new moving army
-			await ctx.db.patch(armyId, {
-				count: army.count - unitsToMove,
-			});
-
-			await ctx.db.insert('armies', {
+		if (unitsToMove < totalUnits) {
+			// Split the army: create new moving army and transfer some units
+			const newArmyId = await ctx.db.insert('armies', {
 				gameId: army.gameId,
 				ownerId: army.ownerId,
 				tileId: army.tileId,
-				count: unitsToMove,
 				targetTileId,
 				path,
 				departureTime: now,
 				arrivalTime: now + travelTime,
 			});
+
+			// Transfer units to new army (take first N units)
+			for (let i = 0; i < unitsToMove; i++) {
+				await ctx.db.patch(armyUnits[i]._id, { armyId: newArmyId });
+			}
 		} else {
 			// Move the entire army
 			await ctx.db.patch(armyId, {
@@ -185,6 +256,67 @@ export const cancelMove = mutation({
 	},
 });
 
+export const retreatArmy = mutation({
+	args: {
+		armyId: v.id('armies'),
+		targetTileId: v.id('tiles'),
+	},
+	handler: async (ctx, { armyId, targetTileId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const army = await ctx.db.get(armyId);
+		if (!army) {
+			throw new Error('Army not found');
+		}
+
+		const player = await ctx.db.get(army.ownerId);
+		if (!player || player.userId !== userId) {
+			throw new Error('Not your army');
+		}
+
+		// Army must not be moving
+		if (army.targetTileId) {
+			throw new Error('Cannot retreat while moving - cancel move first');
+		}
+
+		const currentTile = await ctx.db.get(army.tileId);
+		if (!currentTile) {
+			throw new Error('Current tile not found');
+		}
+
+		const targetTile = await ctx.db.get(targetTileId);
+		if (!targetTile) {
+			throw new Error('Target tile not found');
+		}
+
+		// Target must be adjacent
+		const neighbors = getNeighbors(currentTile.q, currentTile.r);
+		const isAdjacent = neighbors.some((n) => n.q === targetTile.q && n.r === targetTile.r);
+		if (!isAdjacent) {
+			throw new Error('Can only retreat to adjacent tile');
+		}
+
+		// Check if army is in combat (same tile as enemy)
+		const allArmiesOnTile = await ctx.db
+			.query('armies')
+			.withIndex('by_tileId', (q) => q.eq('tileId', army.tileId))
+			.collect();
+
+		const enemyArmies = allArmiesOnTile.filter((a) => a.ownerId !== army.ownerId);
+		if (enemyArmies.length === 0) {
+			throw new Error('Can only retreat when in combat');
+		}
+
+		// Instant teleport to target tile
+		await ctx.db.patch(armyId, {
+			tileId: targetTileId,
+		});
+	},
+});
+
 export const setRallyPoint = mutation({
 	args: {
 		gameId: v.id('games'),
@@ -242,16 +374,38 @@ export const getVisibleForPlayer = query({
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
 
+		const units = await ctx.db
+			.query('units')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
 		const allTiles = await ctx.db
 			.query('tiles')
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
 
+		// Build unit data per army
+		const unitsByArmy = new Map<string, typeof units>();
+		for (const unit of units) {
+			const armyUnits = unitsByArmy.get(unit.armyId) ?? [];
+			armyUnits.push(unit);
+			unitsByArmy.set(unit.armyId, armyUnits);
+		}
+
 		const tileMap = new Map(allTiles.map((t) => [t._id, t]));
+		const _tileByCoord = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
 
 		// Compute visible coordinates from player's owned tiles
 		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
 		const visibleCoords = computeVisibleCoords(ownedTiles);
+
+		// Build armies by tile for combat detection
+		const armiesByTile = new Map<string, typeof armies>();
+		for (const army of armies) {
+			const tileArmies = armiesByTile.get(army.tileId) ?? [];
+			tileArmies.push(army);
+			armiesByTile.set(army.tileId, tileArmies);
+		}
 
 		const now = Date.now();
 
@@ -285,13 +439,64 @@ export const getVisibleForPlayer = query({
 					return null;
 				}
 
+				// Compute unit stats
+				const armyUnits = unitsByArmy.get(army._id) ?? [];
+				const unitCount = armyUnits.length;
+				const totalHp = armyUnits.reduce((sum, u) => sum + u.hp, 0);
+				const averageHp = unitCount > 0 ? totalHp / unitCount : 0;
+				const averageHpPercent = unitCount > 0 ? (averageHp / UNIT_BASE_HP) * 100 : 0;
+
+				// Check if in combat (stationary and enemy on same tile)
+				const tileArmies = armiesByTile.get(army.tileId) ?? [];
+				const enemiesOnTile = tileArmies.filter((a) => a.ownerId !== army.ownerId);
+				const isInCombat = !army.targetTileId && enemiesOnTile.length > 0;
+
 				return {
 					...army,
 					currentQ,
 					currentR,
 					isOwn,
+					unitCount,
+					totalHp,
+					averageHp,
+					averageHpPercent,
+					isInCombat,
 				};
 			})
 			.filter((a) => a !== null);
+	},
+});
+
+// Get tiles that have combat (for UI indicators)
+export const getTilesWithCombat = query({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const armies = await ctx.db
+			.query('armies')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		// Build armies by tile
+		const armiesByTile = new Map<string, typeof armies>();
+		for (const army of armies) {
+			// Only count stationary armies for combat
+			if (army.targetTileId) {
+				continue;
+			}
+			const tileArmies = armiesByTile.get(army.tileId) ?? [];
+			tileArmies.push(army);
+			armiesByTile.set(army.tileId, tileArmies);
+		}
+
+		// Find tiles with multiple owners
+		const combatTileIds: string[] = [];
+		for (const [tileId, tileArmies] of armiesByTile) {
+			const ownerIds = [...new Set(tileArmies.map((a) => a.ownerId))];
+			if (ownerIds.length >= 2) {
+				combatTileIds.push(tileId);
+			}
+		}
+
+		return combatTileIds;
 	},
 });

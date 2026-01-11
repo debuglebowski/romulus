@@ -28,10 +28,13 @@ function GamePage() {
 	const armiesData = useQuery(api.armies.getVisibleForPlayer, { gameId: gameId as Id<'games'> });
 	const economy = useQuery(api.games.getMyEconomy, { gameId: gameId as Id<'games'> });
 	const user = useQuery(api.users.currentUser);
+	const combatTileIds = useQuery(api.armies.getTilesWithCombat, { gameId: gameId as Id<'games'> });
 	const setRatiosMutation = useMutation(api.games.setRatios);
 	const moveArmyMutation = useMutation(api.armies.moveArmy);
 	const cancelMoveMutation = useMutation(api.armies.cancelMove);
 	const setRallyPointMutation = useMutation(api.armies.setRallyPoint);
+	const retreatArmyMutation = useMutation(api.armies.retreatArmy);
+	const buildCityMutation = useMutation(api.tiles.buildCity);
 	const abandonMutation = useMutation(api.games.abandon);
 
 	// Selection state
@@ -129,7 +132,6 @@ function GamePage() {
 			_id: a._id,
 			ownerId: a.ownerId,
 			tileId: a.tileId,
-			count: a.count,
 			currentQ: a.currentQ,
 			currentR: a.currentR,
 			isOwn: a.isOwn,
@@ -137,6 +139,11 @@ function GamePage() {
 			targetTileId: a.targetTileId ?? undefined,
 			departureTime: a.departureTime ?? undefined,
 			arrivalTime: a.arrivalTime ?? undefined,
+			unitCount: a.unitCount,
+			totalHp: a.totalHp,
+			averageHp: a.averageHp,
+			averageHpPercent: a.averageHpPercent,
+			isInCombat: a.isInCombat,
 		}));
 	}, [armiesData]);
 
@@ -210,7 +217,7 @@ function GamePage() {
 							await moveArmyMutation({
 								armyId: selectedArmyId as Id<'armies'>,
 								targetTileId: tileId as Id<'tiles'>,
-								count: moveUnitCount,
+								unitCount: moveUnitCount,
 							});
 							// Keep army selected after initiating move so user can track progress
 						} catch (e) {
@@ -246,7 +253,7 @@ function GamePage() {
 			const army = armies.find((a) => a._id === armyId);
 			if (army) {
 				setSelectedArmyId(armyId);
-				setMoveUnitCount(army.count);
+				setMoveUnitCount(army.unitCount);
 				setMode('move');
 			}
 		},
@@ -299,9 +306,7 @@ function GamePage() {
 			}
 
 			// Find player's capital tile
-			const capitalTile = tilesWithVisibility.find(
-				(t) => t.type === 'capital' && t.ownerId === myPlayer._id,
-			);
+			const capitalTile = tilesWithVisibility.find((t) => t.type === 'capital' && t.ownerId === myPlayer._id);
 			if (!capitalTile) {
 				console.error('No capital found');
 				return;
@@ -323,6 +328,67 @@ function GamePage() {
 			}
 		},
 		[armies, tilesWithVisibility, myPlayer?._id, moveArmyMutation],
+	);
+
+	// Build city handler
+	const handleBuildCity = useCallback(async () => {
+		if (!selectedTileId) {
+			return;
+		}
+		try {
+			await buildCityMutation({ tileId: selectedTileId as Id<'tiles'> });
+		} catch (e) {
+			console.error('Failed to build city:', e);
+		}
+	}, [selectedTileId, buildCityMutation]);
+
+	// Retreat handler
+	const handleRetreat = useCallback(
+		async (armyId: string) => {
+			const army = armies.find((a) => a._id === armyId);
+			if (!army) {
+				return;
+			}
+
+			// Find an adjacent tile to retreat to (prefer owned, then neutral, then enemy)
+			const tileMap = new Map(tilesWithVisibility.map((t) => [coordKey(t.q, t.r), t]));
+			const neighbors = [
+				{ q: army.currentQ + 1, r: army.currentR },
+				{ q: army.currentQ + 1, r: army.currentR - 1 },
+				{ q: army.currentQ, r: army.currentR - 1 },
+				{ q: army.currentQ - 1, r: army.currentR },
+				{ q: army.currentQ - 1, r: army.currentR + 1 },
+				{ q: army.currentQ, r: army.currentR + 1 },
+			];
+
+			// Sort by preference: owned > neutral > enemy
+			const sortedNeighbors = neighbors
+				.map((n) => {
+					const tile = tileMap.get(coordKey(n.q, n.r));
+					if (!tile || tile.visibility !== 'visible') {
+						return null;
+					}
+					const priority = tile.ownerId === myPlayer?._id ? 0 : tile.ownerId === undefined ? 1 : 2;
+					return { tile, priority };
+				})
+				.filter((n) => n !== null)
+				.sort((a, b) => a.priority - b.priority);
+
+			if (sortedNeighbors.length === 0) {
+				console.error('No adjacent tile to retreat to');
+				return;
+			}
+
+			try {
+				await retreatArmyMutation({
+					armyId: armyId as Id<'armies'>,
+					targetTileId: sortedNeighbors[0].tile._id as Id<'tiles'>,
+				});
+			} catch (e) {
+				console.error('Failed to retreat:', e);
+			}
+		},
+		[armies, tilesWithVisibility, myPlayer?._id, retreatArmyMutation],
 	);
 
 	// Menu handlers
@@ -397,6 +463,7 @@ function GamePage() {
 							players={game.players}
 							currentPlayerId={myPlayer?._id ?? ''}
 							armies={armies}
+							combatTileIds={combatTileIds ?? []}
 							selectedTileId={selectedTileId ?? undefined}
 							selectedArmyId={selectedArmyId ?? undefined}
 							rallyPointTileId={myPlayer?.rallyPointTileId ?? undefined}
@@ -412,38 +479,39 @@ function GamePage() {
 					</div>
 				)}
 
-				{/* Right sidebar */}
-				<div className='absolute top-4 right-4 bottom-4 w-64 flex flex-col gap-3 pointer-events-none'>
-					<div className='pointer-events-auto'>
-						<ContextPanel
-							selectedTile={selectedTile}
-							selectedArmy={selectedArmy}
-							stationaryArmiesOnTile={stationaryArmiesOnTile}
-							isOwnTile={isOwnTile}
-							mode={mode}
-							moveUnitCount={moveUnitCount}
-							onMoveUnitCountChange={setMoveUnitCount}
-							onSetRallyPoint={handleSetRallyPoint}
-							onCancelMove={handleCancelMove}
-							onCancelSelection={handleCancelSelection}
-							onSetMoveMode={handleSetMoveMode}
-							onSetRallyMode={handleSetRallyMode}
-							onCallHome={handleCallHome}
-						/>
-					</div>
-					{!isEliminated && (
-						<div className='pointer-events-auto'>
-							<RatioSliders
-								labourRatio={displayRatios.labour}
-								militaryRatio={displayRatios.military}
-								spyRatio={displayRatios.spy}
-								population={economy?.population ?? 0}
-								onRatioChange={handleRatioChange}
-							/>
-						</div>
-					)}
+				{/* Context panel overlay */}
+				<div className='absolute bottom-4 right-4 w-64'>
+					<ContextPanel
+						selectedTile={selectedTile}
+						selectedArmy={selectedArmy}
+						stationaryArmiesOnTile={stationaryArmiesOnTile}
+						isOwnTile={isOwnTile}
+						mode={mode}
+						moveUnitCount={moveUnitCount}
+						playerGold={economy?.gold ?? 0}
+						onMoveUnitCountChange={setMoveUnitCount}
+						onSetRallyPoint={handleSetRallyPoint}
+						onCancelMove={handleCancelMove}
+						onCancelSelection={handleCancelSelection}
+						onSetMoveMode={handleSetMoveMode}
+						onSetRallyMode={handleSetRallyMode}
+						onCallHome={handleCallHome}
+						onBuildCity={handleBuildCity}
+						onRetreat={handleRetreat}
+					/>
 				</div>
 			</div>
+
+			{/* Ratio sliders (only show if not eliminated) */}
+			{!isEliminated && (
+				<RatioSliders
+					labourRatio={displayRatios.labour}
+					militaryRatio={displayRatios.military}
+					spyRatio={displayRatios.spy}
+					population={economy?.population ?? 0}
+					onRatioChange={handleRatioChange}
+				/>
+			)}
 
 			{/* Leave Game Dialog */}
 			<Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>

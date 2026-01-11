@@ -1,7 +1,10 @@
 import { v } from 'convex/values';
-import { internalMutation, query } from './_generated/server';
+
+import { internalMutation, mutation, query } from './_generated/server';
 import { auth } from './auth';
 import { computeVisibleCoords, coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
+
+const CITY_BUILD_COST = 50;
 
 export const generateMap = internalMutation({
 	args: {
@@ -96,10 +99,7 @@ export const generateMap = internalMutation({
 			const pos = startingPositions[i];
 
 			// Get owned tiles for this player
-			const playerOwnedTiles = [
-				pos,
-				...getNeighbors(pos.q, pos.r).filter((n) => allHexes.some((h) => h.q === n.q && h.r === n.r)),
-			];
+			const playerOwnedTiles = [pos, ...getNeighbors(pos.q, pos.r).filter((n) => allHexes.some((h) => h.q === n.q && h.r === n.r))];
 
 			const visibleCoords = computeVisibleCoords(playerOwnedTiles);
 
@@ -131,11 +131,60 @@ export const getForGame = query({
 	},
 });
 
+export const buildCity = mutation({
+	args: { tileId: v.id('tiles') },
+	handler: async (ctx, { tileId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const tile = await ctx.db.get(tileId);
+		if (!tile) {
+			throw new Error('Tile not found');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', tile.gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) {
+			throw new Error('Not in game');
+		}
+
+		if (tile.ownerId !== player._id) {
+			throw new Error('Must own the tile to build a city');
+		}
+
+		if (tile.type !== 'empty') {
+			throw new Error('Can only build city on empty tiles');
+		}
+
+		const currentGold = player.gold ?? 0;
+		if (currentGold < CITY_BUILD_COST) {
+			throw new Error(`Not enough gold (need ${CITY_BUILD_COST}, have ${Math.floor(currentGold)})`);
+		}
+
+		// Deduct gold and build city
+		await ctx.db.patch(player._id, {
+			gold: currentGold - CITY_BUILD_COST,
+		});
+
+		await ctx.db.patch(tileId, {
+			type: 'city',
+		});
+	},
+});
+
 export const getVisibleForPlayer = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -143,7 +192,9 @@ export const getVisibleForPlayer = query({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
+		if (!player) {
+			throw new Error('Not in game');
+		}
 
 		const allTiles = await ctx.db
 			.query('tiles')
@@ -174,7 +225,9 @@ export const getVisibleForPlayer = query({
 		const fogged = notVisibleTiles
 			.map((tile) => {
 				const memory = memoryMap.get(coordKey(tile.q, tile.r));
-				if (!memory) return null;
+				if (!memory) {
+					return null;
+				}
 				return {
 					q: tile.q,
 					r: tile.r,
@@ -207,9 +260,7 @@ export const updatePlayerMemory = internalMutation({
 		for (const tile of visibleTiles) {
 			const existing = await ctx.db
 				.query('playerTileMemory')
-				.withIndex('by_gameId_playerId_coords', (q) =>
-					q.eq('gameId', gameId).eq('playerId', playerId).eq('q', tile.q).eq('r', tile.r),
-				)
+				.withIndex('by_gameId_playerId_coords', (q) => q.eq('gameId', gameId).eq('playerId', playerId).eq('q', tile.q).eq('r', tile.r))
 				.first();
 
 			if (existing) {

@@ -94,7 +94,8 @@ const schema = defineSchema({
 		gameId: v.id('games'),
 		ownerId: v.id('gamePlayers'),
 		tileId: v.id('tiles'),
-		count: v.number(),
+		// Legacy field - kept for migration, computed from units table
+		count: v.optional(v.number()),
 		// Movement (null = stationary)
 		targetTileId: v.optional(v.id('tiles')),
 		path: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
@@ -104,6 +105,14 @@ const schema = defineSchema({
 		.index('by_gameId', ['gameId'])
 		.index('by_tileId', ['tileId'])
 		.index('by_ownerId', ['ownerId']),
+
+	units: defineTable({
+		gameId: v.id('games'),
+		armyId: v.id('armies'),
+		hp: v.number(), // starts at 100, can be float
+	})
+		.index('by_gameId', ['gameId'])
+		.index('by_armyId', ['armyId']),
 
 	gameEvents: defineTable({
 		gameId: v.id('games'),
