@@ -6,12 +6,13 @@ import { Button } from '@/ui/_shadcn/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/_shadcn/dialog';
 import { ContextPanel } from '@/ui/components/context-panel';
 import { GameStatsBar } from '@/ui/components/game-stats-bar';
-import { type ArmyData, HexMap, type TileData } from '@/ui/components/hex-map';
+import { HexMap3D } from '@/ui/components/hex-map-3d';
 import { RatioSliders } from '@/ui/components/ratio-sliders';
 
 import { api } from '../../../../convex/_generated/api';
-import { coordKey, findPath } from '../../../../convex/lib/hex';
+import { computeHorizon, coordKey, findPath } from '../../../../convex/lib/hex';
 
+import type { ArmyData, TileData } from '@/ui/components/hex-map';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 export const Route = createFileRoute('/game/$gameId/')({
@@ -43,6 +44,10 @@ function GamePage() {
 	const [mode, setMode] = useState<SelectionMode>('default');
 	const [moveUnitCount, setMoveUnitCount] = useState<number>(0);
 	const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+
+	// Elimination modal state
+	const [showEliminatedModal, setShowEliminatedModal] = useState(false);
+	const prevEliminatedRef = useRef<number | undefined>();
 
 	// Local ratio state for optimistic UI
 	const [localRatios, setLocalRatios] = useState<{
@@ -90,6 +95,14 @@ function GamePage() {
 
 	const myPlayer = game?.players.find((p) => p.userId === user?._id);
 
+	// Detect elimination and show modal
+	useEffect(() => {
+		if (myPlayer?.eliminatedAt && !prevEliminatedRef.current) {
+			setShowEliminatedModal(true);
+		}
+		prevEliminatedRef.current = myPlayer?.eliminatedAt;
+	}, [myPlayer?.eliminatedAt]);
+
 	// Transform visibility data to TileData format
 	const tilesWithVisibility = useMemo((): TileData[] => {
 		if (!visibilityData) {
@@ -97,8 +110,19 @@ function GamePage() {
 		}
 
 		const result: TileData[] = [];
+		const tileCoords = new Set<string>();
 
+		// Get owned tiles and capital for horizon calculation
+		const ownedTiles = visibilityData.visible.filter((t) => t.ownerId === visibilityData.playerId).map((t) => ({ q: t.q, r: t.r }));
+		const capitalTile = visibilityData.visible.find((t) => t.type === 'capital');
+
+		// Compute horizon: 5 from capital + owned tiles + neighbors + 1
+		const horizon = capitalTile ? computeHorizon({ q: capitalTile.q, r: capitalTile.r }, ownedTiles) : new Set<string>();
+
+		// Add visible tiles (always shown)
 		for (const tile of visibilityData.visible) {
+			const key = coordKey(tile.q, tile.r);
+			tileCoords.add(key);
 			result.push({
 				_id: tile._id,
 				q: tile.q,
@@ -109,7 +133,13 @@ function GamePage() {
 			});
 		}
 
+		// Add fogged tiles (only within horizon)
 		for (const tile of visibilityData.fogged) {
+			const key = coordKey(tile.q, tile.r);
+			if (!horizon.has(key)) {
+				continue;
+			}
+			tileCoords.add(key);
 			result.push({
 				_id: `fogged-${tile.q}-${tile.r}`,
 				q: tile.q,
@@ -118,6 +148,38 @@ function GamePage() {
 				type: tile.lastSeenType,
 				visibility: 'fogged',
 			});
+		}
+
+		// Add unexplored tiles (only within horizon)
+		for (const tile of visibilityData.unexplored ?? []) {
+			const key = coordKey(tile.q, tile.r);
+			if (!horizon.has(key)) {
+				continue;
+			}
+			tileCoords.add(key);
+			result.push({
+				_id: `unexplored-${tile.q}-${tile.r}`,
+				q: tile.q,
+				r: tile.r,
+				ownerId: undefined,
+				type: tile.type,
+				visibility: 'unexplored',
+			});
+		}
+
+		// Add mountains for horizon coords not in DB (map boundary)
+		for (const key of horizon) {
+			if (!tileCoords.has(key)) {
+				const [q, r] = key.split(',').map(Number);
+				result.push({
+					_id: `mountain-${q}-${r}`,
+					q,
+					r,
+					ownerId: undefined,
+					type: 'mountain',
+					visibility: 'visible',
+				});
+			}
 		}
 
 		return result;
@@ -180,6 +242,10 @@ function GamePage() {
 			if (!tile || tile.visibility !== 'visible') {
 				return false;
 			}
+			// Mountains are impassable
+			if (tile.type === 'mountain') {
+				return false;
+			}
 			// Allow destination even if enemy
 			if (coord.q === targetTile.q && coord.r === targetTile.r) {
 				return true;
@@ -202,6 +268,10 @@ function GamePage() {
 					const canTraverse = (coord: { q: number; r: number }) => {
 						const tile = tileMap.get(coordKey(coord.q, coord.r));
 						if (!tile || tile.visibility !== 'visible') {
+							return false;
+						}
+						// Mountains are impassable
+						if (tile.type === 'mountain') {
 							return false;
 						}
 						// Allow destination even if enemy
@@ -396,11 +466,15 @@ function GamePage() {
 		setLeaveDialogOpen(true);
 	}, []);
 
+	const isEliminated = !!myPlayer?.eliminatedAt;
+
 	const handleLeaveGame = useCallback(async () => {
-		await abandonMutation({ gameId: gameId as Id<'games'> });
+		if (!isEliminated) {
+			await abandonMutation({ gameId: gameId as Id<'games'> });
+		}
 		setLeaveDialogOpen(false);
 		navigate({ to: '/lobbies' });
-	}, [gameId, abandonMutation, navigate]);
+	}, [gameId, abandonMutation, navigate, isEliminated]);
 
 	const handleOpenSettings = useCallback(() => {
 		navigate({ search: { settings: 'open' } });
@@ -428,7 +502,20 @@ function GamePage() {
 	}
 
 	const activePlayers = game.players.filter((p) => !p.eliminatedAt);
-	const isEliminated = !!myPlayer?.eliminatedAt;
+
+	// Get elimination reason text
+	const getEliminationReasonText = () => {
+		switch (myPlayer?.eliminationReason) {
+			case 'capitalCaptured':
+				return 'Your capital was captured by an enemy.';
+			case 'debt':
+				return 'You went bankrupt (debt exceeded -50 gold).';
+			case 'forfeit':
+				return 'You forfeited the game.';
+			default:
+				return 'You have been eliminated from the game.';
+		}
+	};
 
 	// Use local ratios for display, fall back to economy data
 	const displayRatios = localRatios ?? {
@@ -444,7 +531,7 @@ function GamePage() {
 				<GameStatsBar
 					gold={economy.gold}
 					goldRate={economy.goldRate}
-					population={economy.population}
+					population={economy.totalUnits ?? economy.population}
 					popCap={economy.popCap}
 					startedAt={economy.startedAt}
 					players={game.players}
@@ -458,7 +545,7 @@ function GamePage() {
 			<div className='relative flex-1 overflow-hidden bg-gray-900'>
 				{tilesWithVisibility.length > 0 ? (
 					<div className='absolute inset-0'>
-						<HexMap
+						<HexMap3D
 							tiles={tilesWithVisibility}
 							players={game.players}
 							currentPlayerId={myPlayer?._id ?? ''}
@@ -479,8 +566,29 @@ function GamePage() {
 					</div>
 				)}
 
-				{/* Context panel overlay */}
-				<div className='absolute bottom-4 right-4 w-64'>
+				{/* Eliminated overlay */}
+				{isEliminated && !showEliminatedModal && (
+					<div className='pointer-events-none absolute inset-0 flex items-center justify-center'>
+						<div className='rounded-lg bg-black/60 px-8 py-4'>
+							<p className='text-4xl font-bold tracking-widest text-red-500'>ELIMINATED</p>
+						</div>
+					</div>
+				)}
+
+				{/* Right panel overlay */}
+				<div className='absolute bottom-4 right-4 flex w-64 flex-col gap-4'>
+					{/* Ratio sliders on top */}
+					{!isEliminated && (
+						<RatioSliders
+							labourRatio={displayRatios.labour}
+							militaryRatio={displayRatios.military}
+							spyRatio={displayRatios.spy}
+							population={economy?.population ?? 0}
+							onRatioChange={handleRatioChange}
+						/>
+					)}
+
+					{/* Tile card below */}
 					<ContextPanel
 						selectedTile={selectedTile}
 						selectedArmy={selectedArmy}
@@ -502,30 +610,47 @@ function GamePage() {
 				</div>
 			</div>
 
-			{/* Ratio sliders (only show if not eliminated) */}
-			{!isEliminated && (
-				<RatioSliders
-					labourRatio={displayRatios.labour}
-					militaryRatio={displayRatios.military}
-					spyRatio={displayRatios.spy}
-					population={economy?.population ?? 0}
-					onRatioChange={handleRatioChange}
-				/>
-			)}
-
 			{/* Leave Game Dialog */}
 			<Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
 				<DialogContent>
 					<DialogHeader>
-						<DialogTitle>Leave Game?</DialogTitle>
-						<DialogDescription>Leaving will count as a forfeit. You will be eliminated from the game.</DialogDescription>
+						<DialogTitle>{isEliminated ? 'Return to Lobby?' : 'Leave Game?'}</DialogTitle>
+						<DialogDescription>
+							{isEliminated
+								? 'You have been eliminated. Return to the lobby to join another game.'
+								: 'Leaving will count as a forfeit. You will be eliminated from the game.'}
+						</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
 						<Button variant='outline' onClick={() => setLeaveDialogOpen(false)}>
 							Cancel
 						</Button>
-						<Button variant='destructive' onClick={handleLeaveGame}>
-							Leave Game
+						<Button variant={isEliminated ? 'default' : 'destructive'} onClick={handleLeaveGame}>
+							{isEliminated ? 'Return to Lobby' : 'Leave Game'}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+
+			{/* Elimination Modal */}
+			<Dialog open={showEliminatedModal} onOpenChange={setShowEliminatedModal}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle className='text-center text-2xl text-red-500'>Defeated</DialogTitle>
+						<DialogDescription className='text-center text-base'>{getEliminationReasonText()}</DialogDescription>
+					</DialogHeader>
+					<DialogFooter className='flex-col gap-2 sm:flex-col'>
+						{game.status === 'finished' ? (
+							<Button className='w-full' onClick={() => navigate({ to: '/game/$gameId/results', params: { gameId } })}>
+								View Results
+							</Button>
+						) : (
+							<Button className='w-full' variant='outline' onClick={() => setShowEliminatedModal(false)}>
+								Spectate
+							</Button>
+						)}
+						<Button className='w-full' variant='ghost' onClick={handleLeaveGame}>
+							Return to Lobby
 						</Button>
 					</DialogFooter>
 				</DialogContent>

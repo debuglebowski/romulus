@@ -113,6 +113,60 @@ export const processTick = internalMutation({
 				newPopAccumulator = 0;
 			}
 
+			// Enforce hard cap - reduce if over
+			if (totalUnits > popCap) {
+				const excess = totalUnits - popCap;
+
+				// Proportional reduction
+				const civilianRatio = newPopulation / totalUnits;
+				let civilianReduction = Math.round(excess * civilianRatio);
+				let militaryReduction = excess - civilianReduction;
+
+				// Cap reductions to available amounts
+				civilianReduction = Math.min(civilianReduction, newPopulation);
+				militaryReduction = excess - civilianReduction; // Military takes remainder
+
+				newPopulation -= civilianReduction;
+
+				// Delete military units from capital first
+				if (militaryReduction > 0) {
+					const capitalTile = playerTiles.find((t) => t.type === 'capital');
+					const capitalArmy = capitalTile ? playerArmies.find((a) => a.tileId === capitalTile._id && !a.targetTileId) : null;
+
+					if (capitalArmy) {
+						const capitalUnits = unitsByArmy.get(capitalArmy._id) ?? [];
+						const toDelete = Math.min(militaryReduction, capitalUnits.length);
+						for (let i = 0; i < toDelete; i++) {
+							await ctx.db.delete(capitalUnits[i]._id);
+						}
+						militaryReduction -= toDelete;
+
+						// Delete army if empty
+						if (toDelete >= capitalUnits.length) {
+							await ctx.db.delete(capitalArmy._id);
+						}
+					}
+
+					// If still over, delete from other armies
+					if (militaryReduction > 0) {
+						for (const army of playerArmies) {
+							if (militaryReduction <= 0) {
+								break;
+							}
+							const armyUnits = unitsByArmy.get(army._id) ?? [];
+							const toDelete = Math.min(militaryReduction, armyUnits.length);
+							for (let i = 0; i < toDelete; i++) {
+								await ctx.db.delete(armyUnits[i]._id);
+							}
+							militaryReduction -= toDelete;
+							if (toDelete >= armyUnits.length) {
+								await ctx.db.delete(army._id);
+							}
+						}
+					}
+				}
+			}
+
 			// Military spawning
 			let newMilAccumulator = player.militaryAccumulator ?? 0;
 			if (military > 0 && player.rallyPointTileId) {

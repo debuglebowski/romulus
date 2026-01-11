@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
 import { auth } from './auth';
-import { computeVisibleCoords, coordKey, findPath, getNeighbors } from './lib/hex';
+import { computeLineOfSight, coordKey, findPath, getNeighbors } from './lib/hex';
 
 import type { Id } from './_generated/dataModel';
 
@@ -153,6 +153,7 @@ export const moveArmy = mutation({
 		const tileMap = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
 
 		// Can only traverse owned or neutral tiles (not enemy tiles except destination)
+		// Non-existent tiles (outside playable map) are blocked by the !tile check
 		const canTraverse = (coord: { q: number; r: number }) => {
 			const tile = tileMap.get(coordKey(coord.q, coord.r));
 			if (!tile) {
@@ -395,9 +396,9 @@ export const getVisibleForPlayer = query({
 		const tileMap = new Map(allTiles.map((t) => [t._id, t]));
 		const _tileByCoord = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
 
-		// Compute visible coordinates from player's owned tiles
+		// Compute Line of Sight from player's owned tiles
 		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
-		const visibleCoords = computeVisibleCoords(ownedTiles);
+		const losCoords = computeLineOfSight(ownedTiles);
 
 		// Build armies by tile for combat detection
 		const armiesByTile = new Map<string, typeof armies>();
@@ -435,7 +436,7 @@ export const getVisibleForPlayer = query({
 				const isOwn = army.ownerId === player._id;
 
 				// Hide enemy armies that aren't on visible tiles
-				if (!isOwn && !visibleCoords.has(coordKey(currentQ, currentR))) {
+				if (!isOwn && !losCoords.has(coordKey(currentQ, currentR))) {
 					return null;
 				}
 

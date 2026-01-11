@@ -32,10 +32,15 @@ export function hexesInRadius(radius: number): HexCoord[] {
 	return results;
 }
 
+// Returns all hexes within radius of a center point
+export function hexesInRadiusFrom(center: HexCoord, radius: number): HexCoord[] {
+	return hexesInRadius(radius).map((h) => ({ q: center.q + h.q, r: center.r + h.r }));
+}
+
 // Pre-defined starting positions for 2-8 players, evenly distributed
-// Returns positions at ~70% of given radius
+// Returns positions at ~50% of given radius (ensures 10+ tiles to edge with larger maps)
 export function getStartingPositions(playerCount: number, radius: number): HexCoord[] {
-	const dist = Math.floor(radius * 0.7);
+	const dist = Math.floor(radius * 0.5);
 	const positions: Record<number, HexCoord[]> = {
 		2: [
 			{ q: 0, r: -dist },
@@ -94,30 +99,64 @@ export function coordKey(q: number, r: number): string {
 	return `${q},${r}`;
 }
 
-// Returns set of coord keys visible from owned tiles (owned + adjacent)
-export function computeVisibleCoords(ownedTiles: HexCoord[]): Set<string> {
-	const visible = new Set<string>();
+// Line of Sight: tiles the player can currently see (owned + their neighbors)
+// Used for fog of war - determines visible vs fogged vs unexplored
+export function computeLineOfSight(ownedTiles: HexCoord[]): Set<string> {
+	const los = new Set<string>();
 	for (const tile of ownedTiles) {
-		visible.add(coordKey(tile.q, tile.r));
+		los.add(coordKey(tile.q, tile.r));
 		for (const neighbor of getNeighbors(tile.q, tile.r)) {
-			visible.add(coordKey(neighbor.q, neighbor.r));
+			los.add(coordKey(neighbor.q, neighbor.r));
 		}
 	}
-	return visible;
+	return los;
+}
+
+// Horizon: render boundary for the visible map area
+// Formula: 5 from capital + owned tiles + neighbors + 1
+// Used client-side for rendering mountains at map boundaries
+export function computeHorizon(capitalCoord: HexCoord, ownedTiles: HexCoord[]): Set<string> {
+	const horizon = new Set<string>();
+
+	// 5-tile radius from capital
+	for (const h of hexesInRadiusFrom(capitalCoord, 5)) {
+		horizon.add(coordKey(h.q, h.r));
+	}
+
+	// Owned tiles + neighbors (ring 1)
+	const ring1 = new Set<string>();
+	for (const tile of ownedTiles) {
+		horizon.add(coordKey(tile.q, tile.r));
+		for (const n of getNeighbors(tile.q, tile.r)) {
+			const key = coordKey(n.q, n.r);
+			horizon.add(key);
+			ring1.add(key);
+		}
+	}
+
+	// +1: neighbors of ring 1 (ring 2)
+	for (const key of ring1) {
+		const [q, r] = key.split(',').map(Number);
+		for (const n of getNeighbors(q, r)) {
+			horizon.add(coordKey(n.q, n.r));
+		}
+	}
+
+	return horizon;
 }
 
 // A* pathfinding - returns path excluding start, including end
 // canTraverse determines if a hex can be walked through (owned/neutral)
-export function findPath(
-	start: HexCoord,
-	end: HexCoord,
-	canTraverse: (coord: HexCoord) => boolean,
-): HexCoord[] | null {
-	if (!canTraverse(end)) return null;
+export function findPath(start: HexCoord, end: HexCoord, canTraverse: (coord: HexCoord) => boolean): HexCoord[] | null {
+	if (!canTraverse(end)) {
+		return null;
+	}
 
 	const startKey = coordKey(start.q, start.r);
 	const endKey = coordKey(end.q, end.r);
-	if (startKey === endKey) return [];
+	if (startKey === endKey) {
+		return [];
+	}
 
 	const openSet = new Map<string, { coord: HexCoord; f: number; g: number }>();
 	const cameFrom = new Map<string, HexCoord>();
@@ -153,7 +192,9 @@ export function findPath(
 
 		for (const neighbor of getNeighbors(current.coord.q, current.coord.r)) {
 			const neighborKey = coordKey(neighbor.q, neighbor.r);
-			if (!canTraverse(neighbor)) continue;
+			if (!canTraverse(neighbor)) {
+				continue;
+			}
 
 			const tentativeG = current.g + 1;
 			const existingG = gScore.get(neighborKey);

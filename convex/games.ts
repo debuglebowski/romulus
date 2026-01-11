@@ -1,10 +1,12 @@
 import { v } from 'convex/values';
+
 import { internal } from './_generated/api';
-import type { Id } from './_generated/dataModel';
 import { internalMutation, mutation, query } from './_generated/server';
-import type { MutationCtx, QueryCtx } from './_generated/server';
 import { auth } from './auth';
 import { getNextAvailableColor } from './lib/colors';
+
+import type { Id } from './_generated/dataModel';
+import type { MutationCtx, QueryCtx } from './_generated/server';
 
 // Helper to leave current game before joining/creating another
 async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
@@ -14,10 +16,14 @@ async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
 		.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
 		.first();
 
-	if (!existingPlayer) return;
+	if (!existingPlayer) {
+		return;
+	}
 
 	const existingGame = await ctx.db.get(existingPlayer.gameId);
-	if (!existingGame) return;
+	if (!existingGame) {
+		return;
+	}
 
 	if (existingGame.status === 'waiting') {
 		// Leave waiting game
@@ -63,18 +69,14 @@ async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
 					await ctx.db.patch(winner.userId, {
 						statGamesPlayed: (winnerUser.statGamesPlayed ?? 0) + 1,
 						statWins: (winnerUser.statWins ?? 0) + 1,
-						statTimePlayed:
-							(winnerUser.statTimePlayed ?? 0) +
-							(existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
+						statTimePlayed: (winnerUser.statTimePlayed ?? 0) + (existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
 					});
 				}
 				const loserUser = await ctx.db.get(userId);
 				if (loserUser) {
 					await ctx.db.patch(userId, {
 						statGamesPlayed: (loserUser.statGamesPlayed ?? 0) + 1,
-						statTimePlayed:
-							(loserUser.statTimePlayed ?? 0) +
-							(existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
+						statTimePlayed: (loserUser.statTimePlayed ?? 0) + (existingGame.startedAt ? Date.now() - existingGame.startedAt : 0),
 					});
 				}
 				await ctx.db.patch(existingPlayer.gameId, {
@@ -88,7 +90,9 @@ async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
 
 async function getGameWithPlayers(ctx: QueryCtx, gameId: Id<'games'>) {
 	const game = await ctx.db.get(gameId);
-	if (!game) return null;
+	if (!game) {
+		return null;
+	}
 
 	const players = await ctx.db
 		.query('gamePlayers')
@@ -152,7 +156,9 @@ export const getMyCurrentGame = query({
 	args: {},
 	handler: async (ctx) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) return null;
+		if (!userId) {
+			return null;
+		}
 
 		// Find active game player entry
 		const gamePlayer = await ctx.db
@@ -161,10 +167,14 @@ export const getMyCurrentGame = query({
 			.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
 			.first();
 
-		if (!gamePlayer) return null;
+		if (!gamePlayer) {
+			return null;
+		}
 
 		const game = await ctx.db.get(gamePlayer.gameId);
-		if (!game || game.status === 'finished') return null;
+		if (!game || game.status === 'finished') {
+			return null;
+		}
 
 		return { gameId: game._id, status: game.status };
 	},
@@ -179,14 +189,20 @@ export const create = mutation({
 	},
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		// Leave any existing game first
 		await leaveCurrentGame(ctx, userId);
 
 		const trimmedName = args.name.trim();
-		if (trimmedName.length === 0) throw new Error('Game name cannot be empty');
-		if (trimmedName.length > 50) throw new Error('Game name too long (max 50 chars)');
+		if (trimmedName.length === 0) {
+			throw new Error('Game name cannot be empty');
+		}
+		if (trimmedName.length > 50) {
+			throw new Error('Game name too long (max 50 chars)');
+		}
 		if (args.maxPlayers < 2 || args.maxPlayers > 8) {
 			throw new Error('Player count must be 2-8');
 		}
@@ -220,7 +236,9 @@ export const join = mutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		// Check if already in this game - no-op
 		const existingPlayer = await ctx.db
@@ -228,21 +246,29 @@ export const join = mutation({
 			.withIndex('by_userId', (q) => q.eq('userId', userId))
 			.filter((q) => q.eq(q.field('eliminatedAt'), undefined))
 			.first();
-		if (existingPlayer?.gameId === args.gameId) return;
+		if (existingPlayer?.gameId === args.gameId) {
+			return;
+		}
 
 		// Leave any other game first
 		await leaveCurrentGame(ctx, userId);
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
-		if (game.status !== 'waiting') throw new Error('Game already started');
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.status !== 'waiting') {
+			throw new Error('Game already started');
+		}
 
 		const players = await ctx.db
 			.query('gamePlayers')
 			.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
 			.collect();
 
-		if (players.length >= game.maxPlayers) throw new Error('Game is full');
+		if (players.length >= game.maxPlayers) {
+			throw new Error('Game is full');
+		}
 
 		const takenColors = players.map((p) => p.color);
 
@@ -262,11 +288,17 @@ export const leave = mutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) return; // Already gone
-		if (game.status !== 'waiting') throw new Error('Cannot leave started game');
+		if (!game) {
+			return; // Already gone
+		}
+		if (game.status !== 'waiting') {
+			throw new Error('Cannot leave started game');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -274,7 +306,9 @@ export const leave = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) return; // Already left
+		if (!player) {
+			return; // Already left
+		}
 
 		await ctx.db.delete(player._id);
 
@@ -300,7 +334,9 @@ export const heartbeat = mutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) return;
+		if (!userId) {
+			return;
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -318,11 +354,17 @@ export const setReady = mutation({
 	args: { gameId: v.id('games'), isReady: v.boolean() },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
-		if (game.status !== 'waiting') throw new Error('Game already started');
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.status !== 'waiting') {
+			throw new Error('Game already started');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -330,7 +372,9 @@ export const setReady = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
+		if (!player) {
+			throw new Error('Not in game');
+		}
 
 		await ctx.db.patch(player._id, { isReady: args.isReady });
 	},
@@ -340,20 +384,32 @@ export const start = mutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
-		if (game.hostId !== userId) throw new Error('Only host can start');
-		if (game.status !== 'waiting') throw new Error('Game already started');
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.hostId !== userId) {
+			throw new Error('Only host can start');
+		}
+		if (game.status !== 'waiting') {
+			throw new Error('Game already started');
+		}
 
 		const players = await ctx.db
 			.query('gamePlayers')
 			.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
 			.collect();
 
-		if (players.length < 2) throw new Error('Need at least 2 players');
-		if (!players.every((p) => p.isReady)) throw new Error('Not all players ready');
+		if (players.length < 2) {
+			throw new Error('Need at least 2 players');
+		}
+		if (!players.every((p) => p.isReady)) {
+			throw new Error('Not all players ready');
+		}
 
 		// Assign starting positions (shuffled)
 		const positions = Array.from({ length: players.length }, (_, i) => i);
@@ -362,9 +418,7 @@ export const start = mutation({
 			[positions[i], positions[j]] = [positions[j], positions[i]];
 		}
 
-		await Promise.all(
-			players.map((player, index) => ctx.db.patch(player._id, { startingPosition: positions[index] })),
-		);
+		await Promise.all(players.map((player, index) => ctx.db.patch(player._id, { startingPosition: positions[index] })));
 
 		await ctx.db.patch(args.gameId, {
 			status: 'inProgress',
@@ -372,9 +426,7 @@ export const start = mutation({
 		});
 
 		// Generate map with player IDs in starting position order
-		const sortedPlayers = [...players].sort(
-			(a, b) => (positions[players.indexOf(a)] ?? 0) - (positions[players.indexOf(b)] ?? 0),
-		);
+		const sortedPlayers = [...players].sort((a, b) => (positions[players.indexOf(a)] ?? 0) - (positions[players.indexOf(b)] ?? 0));
 		await ctx.runMutation(internal.tiles.generateMap, {
 			gameId: args.gameId,
 			playerIds: sortedPlayers.map((p) => p._id),
@@ -385,9 +437,7 @@ export const start = mutation({
 			const capitalTile = await ctx.db
 				.query('tiles')
 				.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
-				.filter((q) =>
-					q.and(q.eq(q.field('ownerId'), player._id), q.eq(q.field('type'), 'capital')),
-				)
+				.filter((q) => q.and(q.eq(q.field('ownerId'), player._id), q.eq(q.field('type'), 'capital')))
 				.first();
 
 			await ctx.db.patch(player._id, {
@@ -410,11 +460,17 @@ export const abandon = mutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
-		if (game.status !== 'inProgress') throw new Error('Game not in progress');
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.status !== 'inProgress') {
+			throw new Error('Game not in progress');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -422,8 +478,12 @@ export const abandon = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
-		if (player.eliminatedAt) throw new Error('Already eliminated');
+		if (!player) {
+			throw new Error('Not in game');
+		}
+		if (player.eliminatedAt) {
+			throw new Error('Already eliminated');
+		}
 
 		// Count remaining players to determine finish position
 		const activePlayers = await ctx.db
@@ -486,8 +546,12 @@ export const eliminate = mutation({
 	},
 	handler: async (ctx, args) => {
 		const game = await ctx.db.get(args.gameId);
-		if (!game) throw new Error('Game not found');
-		if (game.status !== 'inProgress') throw new Error('Game not in progress');
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.status !== 'inProgress') {
+			throw new Error('Game not in progress');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -495,8 +559,12 @@ export const eliminate = mutation({
 			.filter((q) => q.eq(q.field('userId'), args.playerId))
 			.first();
 
-		if (!player) throw new Error('Player not in game');
-		if (player.eliminatedAt) throw new Error('Already eliminated');
+		if (!player) {
+			throw new Error('Player not in game');
+		}
+		if (player.eliminatedAt) {
+			throw new Error('Already eliminated');
+		}
 
 		const activePlayers = await ctx.db
 			.query('gamePlayers')
@@ -558,11 +626,15 @@ export const setRatios = mutation({
 	},
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		// Validate sum <= 100 (remainder is "unassigned" population)
 		const sum = args.labourRatio + args.militaryRatio + args.spyRatio;
-		if (sum > 100.01) throw new Error('Ratios cannot exceed 100');
+		if (sum > 100.01) {
+			throw new Error('Ratios cannot exceed 100');
+		}
 
 		// Validate range 0-100
 		if (
@@ -582,14 +654,16 @@ export const setRatios = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
+		if (!player) {
+			throw new Error('Not in game');
+		}
 
 		// Get current military units
 		const armies = await ctx.db
 			.query('armies')
 			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
 			.collect();
-		const currentMilitary = armies.reduce((sum, a) => sum + a.count, 0);
+		const currentMilitary = armies.reduce((sum, a) => sum + (a.count ?? 0), 0);
 
 		// Get player's tiles for capital lookup
 		const tiles = await ctx.db
@@ -614,9 +688,7 @@ export const setRatios = mutation({
 				newPopulation -= toConscript;
 
 				// Find or create army at rally point
-				const existingRallyArmy = armies.find(
-					(a) => a.tileId === player.rallyPointTileId && !a.targetTileId,
-				);
+				const existingRallyArmy = armies.find((a) => a.tileId === player.rallyPointTileId && !a.targetTileId);
 
 				if (existingRallyArmy) {
 					await ctx.db.patch(existingRallyArmy._id, {
@@ -633,15 +705,10 @@ export const setRatios = mutation({
 			}
 		} else if (targetMilitary < currentMilitary) {
 			// DEMOBILIZE: army at capital → civilians (only from capital)
-			const capitalArmy = armies.find(
-				(a) => a.tileId === capitalTile?._id && !a.targetTileId,
-			);
+			const capitalArmy = armies.find((a) => a.tileId === capitalTile?._id && !a.targetTileId);
 
 			if (capitalArmy) {
-				const toDemobilize = Math.min(
-					currentMilitary - targetMilitary,
-					capitalArmy.count,
-				);
+				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalArmy.count);
 				newPopulation += toDemobilize;
 
 				if (toDemobilize >= capitalArmy.count) {
@@ -667,10 +734,14 @@ export const getMyEconomy = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) return null;
+		if (!userId) {
+			return null;
+		}
 
 		const game = await ctx.db.get(gameId);
-		if (!game) return null;
+		if (!game) {
+			return null;
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -678,7 +749,9 @@ export const getMyEconomy = query({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) return null;
+		if (!player) {
+			return null;
+		}
 
 		// Calculate derived values
 		const labourers = Math.floor((player.population ?? 0) * ((player.labourRatio ?? 100) / 100));
@@ -699,7 +772,7 @@ export const getMyEconomy = query({
 			.query('armies')
 			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
 			.collect();
-		const totalMilitary = armies.reduce((sum, a) => sum + a.count, 0);
+		const totalMilitary = armies.reduce((sum, a) => sum + (a.count ?? 0), 0);
 
 		return {
 			gold: player.gold ?? 0,
@@ -725,7 +798,9 @@ export const lobbyCleanupTick = internalMutation({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
 		const game = await ctx.db.get(gameId);
-		if (!game || game.status !== 'waiting') return; // Stop if game started/deleted
+		if (!game || game.status !== 'waiting') {
+			return; // Stop if game started/deleted
+		}
 
 		const cutoff = Date.now() - STALE_TIMEOUT;
 		const players = await ctx.db
@@ -739,16 +814,13 @@ export const lobbyCleanupTick = internalMutation({
 
 				// Handle host transfer
 				if (game.hostId === player.userId) {
-					const remaining = players.filter(
-						(p) => p._id !== player._id && (!p.lastSeen || p.lastSeen >= cutoff),
-					);
+					const remaining = players.filter((p) => p._id !== player._id && (!p.lastSeen || p.lastSeen >= cutoff));
 					if (remaining.length === 0) {
 						await ctx.db.delete(gameId);
 						return; // Game deleted, no need to reschedule
-					} else {
-						const newHost = remaining.sort((a, b) => a.joinedAt - b.joinedAt)[0];
-						await ctx.db.patch(gameId, { hostId: newHost.userId });
 					}
+					const newHost = remaining.sort((a, b) => a.joinedAt - b.joinedAt)[0];
+					await ctx.db.patch(gameId, { hostId: newHost.userId });
 				}
 			}
 		}

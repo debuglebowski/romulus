@@ -2,7 +2,7 @@ import { v } from 'convex/values';
 
 import { internalMutation, mutation, query } from './_generated/server';
 import { auth } from './auth';
-import { computeVisibleCoords, coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
+import { computeLineOfSight, coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
 
 const CITY_BUILD_COST = 50;
 
@@ -13,7 +13,7 @@ export const generateMap = internalMutation({
 	},
 	handler: async (ctx, { gameId, playerIds }) => {
 		const playerCount = playerIds.length;
-		const radius = 3 + playerCount;
+		const radius = 20 + playerCount;
 
 		// Generate all hexes
 		const allHexes = hexesInRadius(radius);
@@ -96,15 +96,14 @@ export const generateMap = internalMutation({
 
 		for (let i = 0; i < playerCount; i++) {
 			const playerId = playerIds[i];
-			const pos = startingPositions[i];
+			const capitalPos = startingPositions[i];
 
-			// Get owned tiles for this player
-			const playerOwnedTiles = [pos, ...getNeighbors(pos.q, pos.r).filter((n) => allHexes.some((h) => h.q === n.q && h.r === n.r))];
+			// Initialize memory for initial Line of Sight (owned tiles + neighbors)
+			const ownedCoords = [capitalPos, ...getNeighbors(capitalPos.q, capitalPos.r)];
+			const initialLOS = computeLineOfSight(ownedCoords);
 
-			const visibleCoords = computeVisibleCoords(playerOwnedTiles);
-
-			for (const coord of visibleCoords) {
-				const tile = tileMap.get(coord);
+			for (const key of initialLOS) {
+				const tile = tileMap.get(key);
 				if (tile) {
 					await ctx.db.insert('playerTileMemory', {
 						gameId,
@@ -202,13 +201,13 @@ export const getVisibleForPlayer = query({
 			.collect();
 
 		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
-		const visibleCoords = computeVisibleCoords(ownedTiles);
+		const losCoords = computeLineOfSight(ownedTiles);
 
 		const visible = [];
 		const notVisibleTiles = [];
 
 		for (const tile of allTiles) {
-			if (visibleCoords.has(coordKey(tile.q, tile.r))) {
+			if (losCoords.has(coordKey(tile.q, tile.r))) {
 				visible.push(tile);
 			} else {
 				notVisibleTiles.push(tile);
@@ -238,7 +237,12 @@ export const getVisibleForPlayer = query({
 			})
 			.filter((t) => t !== null);
 
-		return { visible, fogged, playerId: player._id };
+		// Unexplored tiles: exist in game but player has never seen them
+		const unexplored = notVisibleTiles
+			.filter((tile) => !memoryMap.has(coordKey(tile.q, tile.r)))
+			.map((tile) => ({ q: tile.q, r: tile.r, type: tile.type }));
+
+		return { visible, fogged, unexplored, playerId: player._id };
 	},
 });
 

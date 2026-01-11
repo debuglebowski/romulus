@@ -37,7 +37,7 @@ export interface TileData {
 	q: number;
 	r: number;
 	ownerId?: string;
-	type: 'empty' | 'city' | 'capital';
+	type: 'empty' | 'city' | 'capital' | 'mountain';
 	visibility: VisibilityState;
 }
 
@@ -458,7 +458,7 @@ export function HexMap({
 							fill={fillColor}
 							stroke='#1f2937'
 							strokeWidth={2}
-							opacity={isFogged ? 0.35 : tile.ownerId ? 1 : 0.6}
+							opacity={isFogged ? 0.2 : tile.ownerId ? 1 : 0.6}
 						/>
 						{isFogged && <polygon points={hexPoints(x, y)} fill='url(#fog-pattern)' opacity={0.7} />}
 						{tile.type === 'capital' && (
