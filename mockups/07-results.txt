@@ -1,0 +1,31 @@
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│                                                                 │
+│                                                                 │
+│                          VICTORY                                │
+│                                                                 │
+│                     ╔═══════════════╗                           │
+│                     ║  MaximusPrime ║                           │
+│                     ║   CONQUERS    ║                           │
+│                     ╚═══════════════╝                           │
+│                                                                 │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │  FINAL STANDINGS                                        │    │
+│  ├─────────────────────────────────────────────────────────┤    │
+│  │   1.  MaximusPrime        12 territories    WINNER      │    │
+│  │   2.  Brutus42             8 territories    Eliminated  │    │
+│  │   3.  Nero_VII             5 territories    Eliminated  │    │
+│  │   4.  Augustus             3 territories    Eliminated  │    │
+│  │   5.  Spartacus            2 territories    Eliminated  │    │
+│  │   6.  Cicero               0 territories    Eliminated  │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│           Game Duration: 23:47                                  │
+│                                                                 │
+│                      ┌─────────────┐                            │
+│                      │ PLAY AGAIN  │                            │
+│                      └─────────────┘                            │
+│                                                                 │
+│                       Return to Title                           │
+└─────────────────────────────────────────────────────────────────┘

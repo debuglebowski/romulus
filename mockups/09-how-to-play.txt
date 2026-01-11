@@ -1,0 +1,31 @@
+┌─────────────────────────────────────────────────────────────────┐
+│                                                                 │
+│  ← Back                                   HOW TO PLAY           │
+│                                                                 │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────┐    │
+│  │                                                         │    │
+│  │   OBJECTIVE                                             │    │
+│  │   ──────────                                            │    │
+│  │   Conquer all territories on the map to win.           │    │
+│  │                                                         │    │
+│  │                                                         │    │
+│  │   TURNS                                                 │    │
+│  │   ─────                                                 │    │
+│  │   Each turn you can:                                    │    │
+│  │     • Deploy reinforcements to your territories        │    │
+│  │     • Attack adjacent enemy territories                │    │
+│  │     • Fortify by moving troops between territories     │    │
+│  │                                                         │    │
+│  │                                                         │    │
+│  │   COMBAT                                                │    │
+│  │   ──────                                                │    │
+│  │   Battles are resolved with dice rolls.                │    │
+│  │   More troops = more dice = better odds.               │    │
+│  │                                                         │    │
+│  │                                                         │    │
+│  └─────────────────────────────────────────────────────────┘    │
+│                                                                 │
+│                        ◀  1 / 3  ▶                              │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
