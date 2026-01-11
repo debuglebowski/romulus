@@ -11,6 +11,7 @@ function Slider({
   value,
   min = 0,
   max = 100,
+  onValueChange,
   ...props
 }: SliderPrimitive.Root.Props) {
   const _values = React.useMemo(
@@ -23,6 +24,19 @@ function Slider({
     [value, defaultValue, min, max]
   )
 
+  // Normalize the callback to always pass an array
+  // Base-ui may pass a single number for single-thumb sliders
+  const handleValueChange = React.useCallback(
+    (newValue: number | number[], event: SliderPrimitive.Root.ChangeEventDetails) => {
+      if (!onValueChange) {
+        return;
+      }
+      const normalized = Array.isArray(newValue) ? newValue : [newValue];
+      onValueChange(normalized, event);
+    },
+    [onValueChange]
+  )
+
   return (
     <SliderPrimitive.Root
       className="w-full"
@@ -32,6 +46,7 @@ function Slider({
       min={min}
       max={max}
       thumbAlignment="edge"
+      onValueChange={handleValueChange}
       {...props}
     >
       <SliderPrimitive.Control

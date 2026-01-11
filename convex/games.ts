@@ -560,9 +560,9 @@ export const setRatios = mutation({
 		const userId = await auth.getUserId(ctx);
 		if (!userId) throw new Error('Not authenticated');
 
-		// Validate sum = 100
+		// Validate sum <= 100 (remainder is "unassigned" population)
 		const sum = args.labourRatio + args.militaryRatio + args.spyRatio;
-		if (Math.abs(sum - 100) > 0.01) throw new Error('Ratios must sum to 100');
+		if (sum > 100.01) throw new Error('Ratios cannot exceed 100');
 
 		// Validate range 0-100
 		if (
@@ -584,7 +584,78 @@ export const setRatios = mutation({
 
 		if (!player) throw new Error('Not in game');
 
+		// Get current military units
+		const armies = await ctx.db
+			.query('armies')
+			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
+			.collect();
+		const currentMilitary = armies.reduce((sum, a) => sum + a.count, 0);
+
+		// Get player's tiles for capital lookup
+		const tiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
+			.filter((q) => q.eq(q.field('ownerId'), player._id))
+			.collect();
+
+		const capitalTile = tiles.find((t) => t.type === 'capital');
+
+		// Calculate total units and target military
+		const totalUnits = (player.population ?? 0) + currentMilitary;
+		const targetMilitary = Math.floor(totalUnits * (args.militaryRatio / 100));
+
+		let newPopulation = player.population ?? 0;
+
+		if (targetMilitary > currentMilitary) {
+			// CONSCRIPT: civilians → army (spawn at rally point)
+			const toConscript = Math.min(targetMilitary - currentMilitary, newPopulation);
+
+			if (toConscript > 0 && player.rallyPointTileId) {
+				newPopulation -= toConscript;
+
+				// Find or create army at rally point
+				const existingRallyArmy = armies.find(
+					(a) => a.tileId === player.rallyPointTileId && !a.targetTileId,
+				);
+
+				if (existingRallyArmy) {
+					await ctx.db.patch(existingRallyArmy._id, {
+						count: existingRallyArmy.count + toConscript,
+					});
+				} else {
+					await ctx.db.insert('armies', {
+						gameId: args.gameId,
+						ownerId: player._id,
+						tileId: player.rallyPointTileId,
+						count: toConscript,
+					});
+				}
+			}
+		} else if (targetMilitary < currentMilitary) {
+			// DEMOBILIZE: army at capital → civilians (only from capital)
+			const capitalArmy = armies.find(
+				(a) => a.tileId === capitalTile?._id && !a.targetTileId,
+			);
+
+			if (capitalArmy) {
+				const toDemobilize = Math.min(
+					currentMilitary - targetMilitary,
+					capitalArmy.count,
+				);
+				newPopulation += toDemobilize;
+
+				if (toDemobilize >= capitalArmy.count) {
+					await ctx.db.delete(capitalArmy._id);
+				} else {
+					await ctx.db.patch(capitalArmy._id, {
+						count: capitalArmy.count - toDemobilize,
+					});
+				}
+			}
+		}
+
 		await ctx.db.patch(player._id, {
+			population: newPopulation,
 			labourRatio: args.labourRatio,
 			militaryRatio: args.militaryRatio,
 			spyRatio: args.spyRatio,
@@ -623,10 +694,19 @@ export const getMyEconomy = query({
 		const hasCapital = tiles.some((t) => t.type === 'capital');
 		const popCap = (hasCapital ? 50 : 0) + cityCount * 20;
 
+		// Get total military units
+		const armies = await ctx.db
+			.query('armies')
+			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
+			.collect();
+		const totalMilitary = armies.reduce((sum, a) => sum + a.count, 0);
+
 		return {
 			gold: player.gold ?? 0,
 			goldRate,
 			population: player.population ?? 0,
+			totalMilitary,
+			totalUnits: (player.population ?? 0) + totalMilitary,
 			popCap,
 			labourRatio: player.labourRatio ?? 100,
 			militaryRatio: player.militaryRatio ?? 0,

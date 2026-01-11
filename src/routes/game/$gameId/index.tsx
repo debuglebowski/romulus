@@ -3,22 +3,16 @@ import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/ui/_shadcn/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from '@/ui/_shadcn/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/_shadcn/dialog';
 import { ContextPanel } from '@/ui/components/context-panel';
 import { GameStatsBar } from '@/ui/components/game-stats-bar';
-import { HexMap, type ArmyData, type TileData } from '@/ui/components/hex-map';
+import { type ArmyData, HexMap, type TileData } from '@/ui/components/hex-map';
 import { RatioSliders } from '@/ui/components/ratio-sliders';
 
 import { api } from '../../../../convex/_generated/api';
-import type { Id } from '../../../../convex/_generated/dataModel';
 import { coordKey, findPath } from '../../../../convex/lib/hex';
+
+import type { Id } from '../../../../convex/_generated/dataModel';
 
 export const Route = createFileRoute('/game/$gameId/')({
 	component: GamePage,
@@ -44,6 +38,7 @@ function GamePage() {
 	const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
 	const [selectedArmyId, setSelectedArmyId] = useState<string | null>(null);
 	const [mode, setMode] = useState<SelectionMode>('default');
+	const [moveUnitCount, setMoveUnitCount] = useState<number>(0);
 	const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
 
 	// Local ratio state for optimistic UI
@@ -75,7 +70,9 @@ function GamePage() {
 			setLocalRatios({ labour, military, spy });
 
 			// Debounce the mutation
-			if (debounceRef.current) clearTimeout(debounceRef.current);
+			if (debounceRef.current) {
+				clearTimeout(debounceRef.current);
+			}
 			debounceRef.current = setTimeout(() => {
 				setRatiosMutation({
 					gameId: gameId as Id<'games'>,
@@ -92,7 +89,9 @@ function GamePage() {
 
 	// Transform visibility data to TileData format
 	const tilesWithVisibility = useMemo((): TileData[] => {
-		if (!visibilityData) return [];
+		if (!visibilityData) {
+			return [];
+		}
 
 		const result: TileData[] = [];
 
@@ -123,7 +122,9 @@ function GamePage() {
 
 	// Transform armies data
 	const armies = useMemo((): ArmyData[] => {
-		if (!armiesData) return [];
+		if (!armiesData) {
+			return [];
+		}
 		return armiesData.map((a) => ({
 			_id: a._id,
 			ownerId: a.ownerId,
@@ -134,6 +135,8 @@ function GamePage() {
 			isOwn: a.isOwn,
 			path: a.path ?? undefined,
 			targetTileId: a.targetTileId ?? undefined,
+			departureTime: a.departureTime ?? undefined,
+			arrivalTime: a.arrivalTime ?? undefined,
 		}));
 	}, [armiesData]);
 
@@ -142,22 +145,38 @@ function GamePage() {
 	const selectedArmy = armies.find((a) => a._id === selectedArmyId);
 	const isOwnTile = selectedTile?.ownerId === myPlayer?._id;
 
+	// Find stationary armies on the selected tile (for tile-based army selection)
+	const stationaryArmiesOnTile = useMemo(() => {
+		if (!selectedTile) {
+			return [];
+		}
+		return armies.filter((a) => a.currentQ === selectedTile.q && a.currentR === selectedTile.r && !a.targetTileId);
+	}, [selectedTile, armies]);
+
 	// Compute movement path preview
 	const movementPath = useMemo(() => {
-		if (mode !== 'move' || !selectedArmyId || !selectedTileId) return undefined;
+		if (mode !== 'move' || !selectedArmyId || !selectedTileId) {
+			return undefined;
+		}
 
 		const army = armies.find((a) => a._id === selectedArmyId);
 		const targetTile = tilesWithVisibility.find((t) => t._id === selectedTileId);
-		if (!army || !targetTile) return undefined;
+		if (!army || !targetTile) {
+			return undefined;
+		}
 
 		// Build tile map for pathfinding
 		const tileMap = new Map(tilesWithVisibility.map((t) => [coordKey(t.q, t.r), t]));
 
 		const canTraverse = (coord: { q: number; r: number }) => {
 			const tile = tileMap.get(coordKey(coord.q, coord.r));
-			if (!tile || tile.visibility !== 'visible') return false;
+			if (!tile || tile.visibility !== 'visible') {
+				return false;
+			}
 			// Allow destination even if enemy
-			if (coord.q === targetTile.q && coord.r === targetTile.r) return true;
+			if (coord.q === targetTile.q && coord.r === targetTile.r) {
+				return true;
+			}
 			return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
 		};
 
@@ -167,22 +186,41 @@ function GamePage() {
 
 	// Tile click handler
 	const handleTileClick = useCallback(
-		async (tileId: string, _q: number, _r: number) => {
+		async (tileId: string, q: number, r: number) => {
 			if (mode === 'move' && selectedArmyId) {
-				// Execute move
-				if (movementPath && movementPath.length > 0) {
-					try {
-						await moveArmyMutation({
-							armyId: selectedArmyId as Id<'armies'>,
-							targetTileId: tileId as Id<'tiles'>,
-						});
-					} catch (e) {
-						console.error('Failed to move army:', e);
+				// Compute path inline using clicked tile coordinates
+				const army = armies.find((a) => a._id === selectedArmyId);
+				if (army) {
+					const tileMap = new Map(tilesWithVisibility.map((t) => [coordKey(t.q, t.r), t]));
+					const canTraverse = (coord: { q: number; r: number }) => {
+						const tile = tileMap.get(coordKey(coord.q, coord.r));
+						if (!tile || tile.visibility !== 'visible') {
+							return false;
+						}
+						// Allow destination even if enemy
+						if (coord.q === q && coord.r === r) {
+							return true;
+						}
+						return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
+					};
+					const path = findPath({ q: army.currentQ, r: army.currentR }, { q, r }, canTraverse);
+
+					if (path && path.length > 0) {
+						try {
+							await moveArmyMutation({
+								armyId: selectedArmyId as Id<'armies'>,
+								targetTileId: tileId as Id<'tiles'>,
+								count: moveUnitCount,
+							});
+							// Keep army selected after initiating move so user can track progress
+						} catch (e) {
+							console.error('Failed to move army:', e);
+						}
 					}
 				}
 				setMode('default');
-				setSelectedArmyId(null);
-				setSelectedTileId(null);
+				setMoveUnitCount(0);
+				// Don't clear selection - keep army selected to show movement progress
 			} else if (mode === 'rally') {
 				// Set rally point handled by context panel button
 				setSelectedTileId(tileId);
@@ -192,7 +230,7 @@ function GamePage() {
 				setSelectedArmyId(null);
 			}
 		},
-		[mode, selectedArmyId, movementPath, moveArmyMutation],
+		[mode, selectedArmyId, armies, tilesWithVisibility, myPlayer?._id, moveArmyMutation, moveUnitCount],
 	);
 
 	// Army click handler
@@ -203,16 +241,26 @@ function GamePage() {
 	}, []);
 
 	// Context panel handlers
-	const handleSetMoveMode = useCallback(() => {
-		setMode('move');
-	}, []);
+	const handleSetMoveMode = useCallback(
+		(armyId: string) => {
+			const army = armies.find((a) => a._id === armyId);
+			if (army) {
+				setSelectedArmyId(armyId);
+				setMoveUnitCount(army.count);
+				setMode('move');
+			}
+		},
+		[armies],
+	);
 
 	const handleSetRallyMode = useCallback(() => {
 		setMode('rally');
 	}, []);
 
 	const handleCancelMove = useCallback(async () => {
-		if (!selectedArmyId) return;
+		if (!selectedArmyId) {
+			return;
+		}
 		try {
 			await cancelMoveMutation({ armyId: selectedArmyId as Id<'armies'> });
 		} catch (e) {
@@ -221,7 +269,9 @@ function GamePage() {
 	}, [selectedArmyId, cancelMoveMutation]);
 
 	const handleSetRallyPoint = useCallback(async () => {
-		if (!selectedTileId) return;
+		if (!selectedTileId) {
+			return;
+		}
 		try {
 			await setRallyPointMutation({
 				gameId: gameId as Id<'games'>,
@@ -237,7 +287,43 @@ function GamePage() {
 		setSelectedTileId(null);
 		setSelectedArmyId(null);
 		setMode('default');
+		setMoveUnitCount(0);
 	}, []);
+
+	// Call home handler - move army to player's capital
+	const handleCallHome = useCallback(
+		async (armyId: string) => {
+			const army = armies.find((a) => a._id === armyId);
+			if (!army || !myPlayer?._id) {
+				return;
+			}
+
+			// Find player's capital tile
+			const capitalTile = tilesWithVisibility.find(
+				(t) => t.type === 'capital' && t.ownerId === myPlayer._id,
+			);
+			if (!capitalTile) {
+				console.error('No capital found');
+				return;
+			}
+
+			// Don't move if already at capital
+			if (army.currentQ === capitalTile.q && army.currentR === capitalTile.r) {
+				return;
+			}
+
+			try {
+				await moveArmyMutation({
+					armyId: armyId as Id<'armies'>,
+					targetTileId: capitalTile._id as Id<'tiles'>,
+				});
+				setSelectedArmyId(armyId);
+			} catch (e) {
+				console.error('Failed to call army home:', e);
+			}
+		},
+		[armies, tilesWithVisibility, myPlayer?._id, moveArmyMutation],
+	);
 
 	// Menu handlers
 	const handleOpenLeaveDialog = useCallback(() => {
@@ -317,6 +403,7 @@ function GamePage() {
 							movementPath={movementPath}
 							onTileClick={handleTileClick}
 							onArmyClick={handleArmyClick}
+							onBackgroundClick={handleCancelSelection}
 						/>
 					</div>
 				) : (
@@ -325,41 +412,45 @@ function GamePage() {
 					</div>
 				)}
 
-				{/* Context panel overlay */}
-				<div className='absolute bottom-4 right-4 w-64'>
-					<ContextPanel
-						selectedTile={selectedTile}
-						selectedArmy={selectedArmy}
-						isOwnTile={isOwnTile}
-						mode={mode}
-						onSetRallyPoint={handleSetRallyPoint}
-						onCancelMove={handleCancelMove}
-						onCancelSelection={handleCancelSelection}
-						onSetMoveMode={handleSetMoveMode}
-						onSetRallyMode={handleSetRallyMode}
-					/>
+				{/* Right sidebar */}
+				<div className='absolute top-4 right-4 bottom-4 w-64 flex flex-col gap-3 pointer-events-none'>
+					<div className='pointer-events-auto'>
+						<ContextPanel
+							selectedTile={selectedTile}
+							selectedArmy={selectedArmy}
+							stationaryArmiesOnTile={stationaryArmiesOnTile}
+							isOwnTile={isOwnTile}
+							mode={mode}
+							moveUnitCount={moveUnitCount}
+							onMoveUnitCountChange={setMoveUnitCount}
+							onSetRallyPoint={handleSetRallyPoint}
+							onCancelMove={handleCancelMove}
+							onCancelSelection={handleCancelSelection}
+							onSetMoveMode={handleSetMoveMode}
+							onSetRallyMode={handleSetRallyMode}
+							onCallHome={handleCallHome}
+						/>
+					</div>
+					{!isEliminated && (
+						<div className='pointer-events-auto'>
+							<RatioSliders
+								labourRatio={displayRatios.labour}
+								militaryRatio={displayRatios.military}
+								spyRatio={displayRatios.spy}
+								population={economy?.population ?? 0}
+								onRatioChange={handleRatioChange}
+							/>
+						</div>
+					)}
 				</div>
 			</div>
-
-			{/* Ratio sliders (only show if not eliminated) */}
-			{!isEliminated && (
-				<RatioSliders
-					labourRatio={displayRatios.labour}
-					militaryRatio={displayRatios.military}
-					spyRatio={displayRatios.spy}
-					population={economy?.population ?? 0}
-					onRatioChange={handleRatioChange}
-				/>
-			)}
 
 			{/* Leave Game Dialog */}
 			<Dialog open={leaveDialogOpen} onOpenChange={setLeaveDialogOpen}>
 				<DialogContent>
 					<DialogHeader>
 						<DialogTitle>Leave Game?</DialogTitle>
-						<DialogDescription>
-							Leaving will count as a forfeit. You will be eliminated from the game.
-						</DialogDescription>
+						<DialogDescription>Leaving will count as a forfeit. You will be eliminated from the game.</DialogDescription>
 					</DialogHeader>
 					<DialogFooter>
 						<Button variant='outline' onClick={() => setLeaveDialogOpen(false)}>

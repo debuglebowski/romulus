@@ -1,5 +1,5 @@
 import { IconBuilding, IconFlag, IconShield, IconStar } from '@tabler/icons-react';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const HEX_SIZE = 28;
 const HEX_WIDTH = HEX_SIZE * 2;
@@ -51,6 +51,8 @@ export interface ArmyData {
 	isOwn: boolean;
 	path?: { q: number; r: number }[];
 	targetTileId?: string;
+	departureTime?: number;
+	arrivalTime?: number;
 }
 
 interface HexMapProps {
@@ -64,6 +66,7 @@ interface HexMapProps {
 	movementPath?: { q: number; r: number }[];
 	onTileClick?: (tileId: string, q: number, r: number) => void;
 	onArmyClick?: (armyId: string) => void;
+	onBackgroundClick?: () => void;
 }
 
 const PAN_STEP = HEX_SIZE * 2; // pixels in SVG coords per arrow press
@@ -81,6 +84,7 @@ export function HexMap({
 	movementPath,
 	onTileClick,
 	onArmyClick,
+	onBackgroundClick,
 }: HexMapProps) {
 	const svgRef = useRef<SVGSVGElement>(null);
 	const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
@@ -88,6 +92,7 @@ export function HexMap({
 	const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 	const [hasDragged, setHasDragged] = useState(false);
 	const [zoom, setZoom] = useState(1);
+	const [now, setNow] = useState(Date.now());
 
 	const playerColorMap = useMemo(() => {
 		const map = new Map<string, string>();
@@ -96,6 +101,18 @@ export function HexMap({
 		}
 		return map;
 	}, [players]);
+
+	// Check if there are any moving armies for animation
+	const hasMovingArmies = armies.some((a) => a.targetTileId && a.departureTime && a.arrivalTime && a.path?.length);
+
+	// Update time for smooth animation of moving armies
+	useEffect(() => {
+		if (!hasMovingArmies) {
+			return;
+		}
+		const interval = setInterval(() => setNow(Date.now()), 100); // 10fps
+		return () => clearInterval(interval);
+	}, [hasMovingArmies]);
 
 	// Calculate bounds for viewBox
 	const bounds = useMemo(() => {
@@ -125,19 +142,41 @@ export function HexMap({
 		};
 	}, [tiles]);
 
-	// Group armies by current position
-	const armiesByCoord = useMemo(() => {
-		const map = new Map<string, ArmyData[]>();
+	// Separate moving and stationary armies
+	const { stationaryByCoord, movingArmies } = useMemo(() => {
+		const stationary = new Map<string, ArmyData[]>();
+		const moving: ArmyData[] = [];
+
 		for (const army of armies) {
-			const key = `${army.currentQ},${army.currentR}`;
-			const existing = map.get(key) || [];
-			existing.push(army);
-			map.set(key, existing);
+			if (army.targetTileId && army.departureTime && army.arrivalTime && army.path?.length) {
+				moving.push(army);
+			} else {
+				const key = `${army.currentQ},${army.currentR},${army.ownerId}`;
+				const existing = stationary.get(key) || [];
+				existing.push(army);
+				stationary.set(key, existing);
+			}
 		}
-		return map;
+		return { stationaryByCoord: stationary, movingArmies: moving };
 	}, [armies]);
 
-	// Build movement path line
+	// Build a map of coordinate -> list of owner IDs for offset calculation when multiple teams share a tile
+	const coordToOwners = useMemo(() => {
+		const map = new Map<string, string[]>();
+		for (const [key] of stationaryByCoord.entries()) {
+			const parts = key.split(',');
+			const coordKey = `${parts[0]},${parts[1]}`;
+			const ownerId = parts[2];
+			const owners = map.get(coordKey) || [];
+			if (!owners.includes(ownerId)) {
+				owners.push(ownerId);
+				map.set(coordKey, owners);
+			}
+		}
+		return map;
+	}, [stationaryByCoord]);
+
+	// Build movement path line (preview when selecting destination)
 	const pathLine = useMemo(() => {
 		if (!movementPath || movementPath.length === 0) {
 			return null;
@@ -148,6 +187,60 @@ export function HexMap({
 		});
 		return points.join(' ');
 	}, [movementPath]);
+
+	// Get the selected moving army's destination tile for pulsing effect
+	const selectedMovingArmyDestination = useMemo(() => {
+		if (!selectedArmyId) {
+			return null;
+		}
+
+		const selectedArmy = armies.find((a) => a._id === selectedArmyId);
+		if (!selectedArmy?.targetTileId) {
+			return null;
+		}
+
+		// Find the destination tile
+		const destTile = tiles.find((t) => t._id === selectedArmy.targetTileId);
+		if (!destTile) {
+			return null;
+		}
+
+		return { q: destTile.q, r: destTile.r };
+	}, [selectedArmyId, armies, tiles]);
+
+	// Calculate interpolated pixel position for a moving army
+	function getMovingArmyPosition(army: ArmyData): { x: number; y: number } {
+		if (!army.departureTime || !army.arrivalTime || !army.path || army.path.length === 0) {
+			// Fallback to current position
+			return axialToPixel(army.currentQ, army.currentR);
+		}
+
+		const elapsed = Math.max(0, now - army.departureTime);
+		const totalTime = army.arrivalTime - army.departureTime;
+		const pathLength = army.path.length;
+		const timePerHex = totalTime / pathLength;
+
+		// Which segment are we in? (segment i = traveling to path[i])
+		const segmentIndex = Math.min(Math.floor(elapsed / timePerHex), pathLength - 1);
+		const segmentProgress = Math.min((elapsed - segmentIndex * timePerHex) / timePerHex, 1);
+
+		// Get origin hex from tiles (army.tileId is the starting tile)
+		const originTile = tiles.find((t) => t._id === army.tileId);
+		const originHex = originTile ? { q: originTile.q, r: originTile.r } : army.path[0]; // Fallback if origin tile not visible
+
+		// Determine from/to hexes for current segment
+		const fromHex = segmentIndex === 0 ? originHex : army.path[segmentIndex - 1];
+		const toHex = army.path[segmentIndex];
+
+		// Interpolate pixel position
+		const from = axialToPixel(fromHex.q, fromHex.r);
+		const to = axialToPixel(toHex.q, toHex.r);
+
+		return {
+			x: from.x + (to.x - from.x) * segmentProgress,
+			y: from.y + (to.y - from.y) * segmentProgress,
+		};
+	}
 
 	// Convert screen delta to SVG coordinate delta
 	function screenToSvgDelta(dx: number, dy: number) {
@@ -264,12 +357,58 @@ export function HexMap({
 			onWheel={handleWheel}
 		>
 			<defs>
+				<style>
+					{`
+						@keyframes shield-pulse {
+							0%, 100% { opacity: 1; }
+							50% { opacity: 0.5; }
+						}
+						@keyframes destination-pulse {
+							0%, 100% { opacity: 1; stroke-width: 2; }
+							50% { opacity: 0.4; stroke-width: 3; }
+						}
+						.animate-shield-pulse {
+							animation: shield-pulse 1s ease-in-out infinite;
+						}
+						.animate-destination-pulse {
+							animation: destination-pulse 1.5s ease-in-out infinite;
+						}
+					`}
+				</style>
 				<pattern id='fog-pattern' patternUnits='userSpaceOnUse' width='6' height='6'>
 					<rect width='6' height='6' fill='#0a0a0a' />
 					<line x1='0' y1='0' x2='6' y2='6' stroke='#1a1a1a' strokeWidth='1' />
 					<line x1='6' y1='0' x2='0' y2='6' stroke='#1a1a1a' strokeWidth='1' />
 				</pattern>
+				<filter id='selection-glow' x='-50%' y='-50%' width='200%' height='200%'>
+					<feGaussianBlur stdDeviation='2' result='blur' />
+					<feMerge>
+						<feMergeNode in='blur' />
+						<feMergeNode in='SourceGraphic' />
+					</feMerge>
+				</filter>
+				<filter id='shield-glow' x='-100%' y='-100%' width='300%' height='300%'>
+					<feGaussianBlur stdDeviation='1.5' result='blur' />
+					<feMerge>
+						<feMergeNode in='blur' />
+						<feMergeNode in='SourceGraphic' />
+					</feMerge>
+				</filter>
 			</defs>
+
+			{/* Clickable background to deselect */}
+			<rect
+				x={bounds.minX - 1000}
+				y={bounds.minY - 1000}
+				width={bounds.maxX - bounds.minX + 2000}
+				height={bounds.maxY - bounds.minY + 2000}
+				fill='transparent'
+				onClick={() => {
+					if (!hasDragged && onBackgroundClick) {
+						onBackgroundClick();
+					}
+				}}
+			/>
 
 			{/* Tiles */}
 			{tiles.map((tile) => {
@@ -280,7 +419,6 @@ export function HexMap({
 				const { x, y } = axialToPixel(tile.q, tile.r);
 				const ownerColor = tile.ownerId ? playerColorMap.get(tile.ownerId) : undefined;
 				const isFogged = tile.visibility === 'fogged';
-				const isSelected = tile._id === selectedTileId;
 				const isRallyPoint = tile._id === rallyPointTileId;
 
 				let fillColor = '#374151';
@@ -303,8 +441,8 @@ export function HexMap({
 						<polygon
 							points={hexPoints(x, y)}
 							fill={fillColor}
-							stroke={isSelected ? '#fff' : '#1f2937'}
-							strokeWidth={isSelected ? 3 : 2}
+							stroke='#1f2937'
+							strokeWidth={2}
 							opacity={isFogged ? 0.35 : tile.ownerId ? 1 : 0.6}
 						/>
 						{isFogged && <polygon points={hexPoints(x, y)} fill='url(#fog-pattern)' opacity={0.7} />}
@@ -327,43 +465,99 @@ export function HexMap({
 				);
 			})}
 
-			{/* Movement path preview */}
+			{/* Selection ring - rendered after all tiles to be on top */}
+			{selectedTileId &&
+				(() => {
+					const selectedTile = tiles.find((t) => t._id === selectedTileId);
+					if (!selectedTile || selectedTile.visibility === 'unexplored') {
+						return null;
+					}
+					const { x, y } = axialToPixel(selectedTile.q, selectedTile.r);
+					return (
+						<polygon
+							points={hexPoints(x, y)}
+							fill='none'
+							stroke='#e5e7eb'
+							strokeWidth={1.5}
+							strokeDasharray='6,3'
+							filter='url(#selection-glow)'
+						/>
+					);
+				})()}
+
+			{/* Movement path preview (when selecting destination) */}
 			{pathLine && <polyline points={pathLine} fill='none' stroke='#22c55e' strokeWidth={3} strokeDasharray='8,4' opacity={0.8} />}
 
-			{/* Armies */}
-			{Array.from(armiesByCoord.entries()).map(([coord, coordArmies]) => {
-				const [q, r] = coord.split(',').map(Number);
+			{/* Pulsing ring around destination tile for selected moving army */}
+			{selectedMovingArmyDestination &&
+				(() => {
+					const { x, y } = axialToPixel(selectedMovingArmyDestination.q, selectedMovingArmyDestination.r);
+					return <polygon points={hexPoints(x, y)} fill='none' stroke='#f59e0b' strokeWidth={2} className='animate-destination-pulse' />;
+				})()}
+
+			{/* Stationary Armies (not directly selectable - select via tile) */}
+			{Array.from(stationaryByCoord.entries()).map(([key, coordArmies]) => {
+				const parts = key.split(',');
+				const q = Number(parts[0]);
+				const r = Number(parts[1]);
+				const ownerId = parts[2];
 				const { x, y } = axialToPixel(q, r);
 
-				// Show only the first army icon, sum counts if multiple
-				const primaryArmy = coordArmies[0];
+				// Calculate horizontal offset when multiple teams share a tile
+				const coordKey = `${q},${r}`;
+				const owners = coordToOwners.get(coordKey) || [ownerId];
+				const teamIndex = owners.indexOf(ownerId);
+				const teamCount = owners.length;
+				// Shield width is 10px, so offset by (shieldWidth + gap) to prevent overlap
+				const offsetX = teamCount > 1 ? (teamIndex - (teamCount - 1) / 2) * 10.2 : 0;
+
 				const totalCount = coordArmies.reduce((sum, a) => sum + a.count, 0);
-				const isSelected = coordArmies.some((a) => a._id === selectedArmyId);
-				const ownerColor = playerColorMap.get(primaryArmy.ownerId) || '#888';
+				const ownerColor = playerColorMap.get(ownerId) || '#888';
+
+				return (
+					<g key={`army-${key}`} style={{ pointerEvents: 'none' }}>
+						{/* Shield filled with team color */}
+						<IconShield x={x - 5 + offsetX} y={y + 7} width={10} height={10} stroke='#000' strokeWidth={1} fill={ownerColor} />
+						{/* Count inside shield */}
+						<text x={x + offsetX} y={y + 13} textAnchor='middle' dominantBaseline='middle' fontSize={4} fontWeight='bold' fill='#fff'>
+							{totalCount}
+						</text>
+					</g>
+				);
+			})}
+
+			{/* Moving Armies (rendered with interpolated positions) */}
+			{movingArmies.map((army) => {
+				const { x, y } = getMovingArmyPosition(army);
+				const isSelected = army._id === selectedArmyId;
+				const ownerColor = playerColorMap.get(army.ownerId) || '#888';
 
 				return (
 					<g
-						key={`army-${coord}`}
+						key={`moving-army-${army._id}`}
 						onClick={(e) => {
 							e.stopPropagation();
-							if (!hasDragged && primaryArmy.isOwn) {
-								onArmyClick?.(primaryArmy._id);
+							if (!hasDragged && army.isOwn) {
+								onArmyClick?.(army._id);
 							}
 						}}
-						style={{ cursor: primaryArmy.isOwn && onArmyClick ? 'pointer' : 'default' }}
+						style={{ cursor: army.isOwn && onArmyClick ? 'pointer' : 'default' }}
 					>
-						<circle
-							cx={x}
-							cy={y + 12}
-							r={12}
-							fill={ownerColor}
-							stroke={isSelected ? '#fff' : '#000'}
+						{/* Shield filled with team color */}
+						<IconShield
+							x={x - 5}
+							y={y + 7}
+							width={10}
+							height={10}
+							stroke={isSelected ? '#f59e0b' : '#000'}
 							strokeWidth={isSelected ? 2 : 1}
-							opacity={0.9}
+							fill={ownerColor}
+							filter={isSelected ? 'url(#shield-glow)' : undefined}
+							className={isSelected ? 'animate-shield-pulse' : undefined}
 						/>
-						<IconShield x={x - 6} y={y + 6} width={12} height={12} stroke='#fff' fill='none' />
-						<text x={x} y={y + 18} textAnchor='middle' fontSize={8} fontWeight='bold' fill='#fff'>
-							{totalCount}
+						{/* Count inside shield */}
+						<text x={x} y={y + 13} textAnchor='middle' dominantBaseline='middle' fontSize={4} fontWeight='bold' fill='#fff'>
+							{army.count}
 						</text>
 					</g>
 				);

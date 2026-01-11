@@ -2,6 +2,7 @@ import { v } from 'convex/values';
 import { internal } from './_generated/api';
 import { internalMutation } from './_generated/server';
 
+const TICK_INTERVAL_MS = 5000; // 5s for dev, 1000 for production
 const UPKEEP_PER_UNIT = 0.1; // gold/sec per military unit
 
 export const processTick = internalMutation({
@@ -43,7 +44,6 @@ export const processTick = internalMutation({
 			if (player.population === undefined || player.labourRatio === undefined) continue;
 
 			const labourers = Math.floor(player.population * (player.labourRatio / 100));
-			const military = Math.floor(player.population * ((player.militaryRatio ?? 0) / 100));
 
 			// Get player's tiles
 			const playerTiles = allTiles.filter((t) => t.ownerId === player._id);
@@ -53,64 +53,38 @@ export const processTick = internalMutation({
 
 			// Count total military units for upkeep
 			const playerArmies = allArmies.filter((a) => a.ownerId === player._id);
-			const totalUnits = playerArmies.reduce((sum, a) => sum + a.count, 0);
-			const upkeepCost = totalUnits * UPKEEP_PER_UNIT;
+			const totalMilitary = playerArmies.reduce((sum, a) => sum + a.count, 0);
+			const upkeepCost = totalMilitary * UPKEEP_PER_UNIT;
 
 			// Gold: 1 gold/sec per 5 labourers - upkeep
 			const goldPerTick = labourers / 5 - upkeepCost;
 			let newGold = (player.gold ?? 0) + goldPerTick;
 
-			// Population growth (only if below cap)
+			// Population growth (only if total units below combined cap)
+			// Combined cap: civilians + military must not exceed popCap
 			let newPopulation = player.population;
 			let newPopAccumulator = player.populationAccumulator ?? 0;
+			const totalUnits = player.population + totalMilitary;
 
-			if (player.population < popCap) {
+			if (totalUnits < popCap) {
 				const popGrowthPerTick = (labourers / 10 + cityCount * 0.5) / 60;
 				newPopAccumulator += popGrowthPerTick;
 
 				if (newPopAccumulator >= 1) {
 					const spawn = Math.floor(newPopAccumulator);
 					newPopAccumulator -= spawn;
-					newPopulation = Math.min(popCap, player.population + spawn);
+					// Cap growth so total doesn't exceed popCap
+					const maxGrowth = popCap - totalUnits;
+					newPopulation = player.population + Math.min(spawn, maxGrowth);
 				}
 			} else {
 				newPopAccumulator = 0;
-			}
-
-			// Military spawning
-			let newMilAccumulator = player.militaryAccumulator ?? 0;
-			if (military > 0 && player.rallyPointTileId) {
-				// Spawn rate: 1 unit per 60 seconds per military pop assigned
-				const spawnRate = military / 60;
-				newMilAccumulator += spawnRate;
-
-				if (newMilAccumulator >= 1) {
-					const unitsToSpawn = Math.floor(newMilAccumulator);
-					newMilAccumulator -= unitsToSpawn;
-
-					// Find or create army at rally point
-					const existingArmy = playerArmies.find(
-						(a) => a.tileId === player.rallyPointTileId && !a.targetTileId,
-					);
-
-					if (existingArmy) {
-						await ctx.db.patch(existingArmy._id, { count: existingArmy.count + unitsToSpawn });
-					} else {
-						await ctx.db.insert('armies', {
-							gameId,
-							ownerId: player._id,
-							tileId: player.rallyPointTileId,
-							count: unitsToSpawn,
-						});
-					}
-				}
 			}
 
 			await ctx.db.patch(player._id, {
 				gold: newGold,
 				population: newPopulation,
 				populationAccumulator: newPopAccumulator,
-				militaryAccumulator: newMilAccumulator,
 			});
 		}
 
@@ -219,8 +193,8 @@ export const processTick = internalMutation({
 			return; // Don't schedule next tick
 		}
 
-		// Schedule next tick in 1 second
-		await ctx.scheduler.runAfter(1000, internal.tick.processTick, { gameId });
+		// Schedule next tick
+		await ctx.scheduler.runAfter(TICK_INTERVAL_MS, internal.tick.processTick, { gameId });
 	},
 });
 
@@ -233,6 +207,6 @@ export const startGameTick = internalMutation({
 		});
 
 		// Schedule first tick
-		await ctx.scheduler.runAfter(1000, internal.tick.processTick, { gameId });
+		await ctx.scheduler.runAfter(TICK_INTERVAL_MS, internal.tick.processTick, { gameId });
 	},
 });

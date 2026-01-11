@@ -1,4 +1,4 @@
-import { IconHammer, IconShield, IconSpy } from '@tabler/icons-react';
+import { IconHammer, IconMoodEmpty, IconShield, IconSpy } from '@tabler/icons-react';
 
 import { Slider } from '@/ui/_shadcn/slider';
 
@@ -10,83 +10,77 @@ interface RatioSlidersProps {
 	onRatioChange: (labour: number, military: number, spy: number) => void;
 }
 
-export function RatioSliders({
-	labourRatio,
-	militaryRatio,
-	spyRatio,
-	population,
-	onRatioChange,
-}: RatioSlidersProps) {
+export function RatioSliders({ labourRatio, militaryRatio, spyRatio, population, onRatioChange }: RatioSlidersProps) {
+	// Calculate idle percentage (unassigned population)
+	const idleRatio = 100 - labourRatio - militaryRatio - spyRatio;
+
 	const handleSliderChange = (which: 'labour' | 'military' | 'spy', newValue: number) => {
-		// Validate all current values are valid numbers
-		if (!Number.isFinite(labourRatio) || !Number.isFinite(militaryRatio) || !Number.isFinite(spyRatio)) {
-			return;
-		}
+		// Validate input
 		if (!Number.isFinite(newValue)) {
 			return;
 		}
 
-		const current = { labour: labourRatio, military: militaryRatio, spy: spyRatio };
-		const oldValue = current[which];
-		const delta = newValue - oldValue;
+		// Calculate the max for this slider based on available idle space
+		const maxForSlider = {
+			labour: 100 - militaryRatio - spyRatio,
+			military: 100 - labourRatio - spyRatio,
+			spy: 100 - labourRatio - militaryRatio,
+		}[which];
 
-		if (delta === 0) return;
+		// Clamp to valid range (0 to available max)
+		const clampedValue = Math.max(0, Math.min(maxForSlider, newValue));
 
-		// Get the other two keys
-		const otherKeys = (['labour', 'military', 'spy'] as const).filter((k) => k !== which);
-		const otherSum = current[otherKeys[0]] + current[otherKeys[1]];
+		// Update only the changed slider, keep others the same
+		const newRatios = {
+			labour: labourRatio,
+			military: militaryRatio,
+			spy: spyRatio,
+			[which]: clampedValue,
+		};
 
-		let newA: number;
-		let newB: number;
-
-		if (otherSum === 0) {
-			// Both others are 0
-			if (delta > 0) return; // Can't increase, nothing to take from
-			// When decreasing, distribute freed amount evenly to others
-			const freed = -delta;
-			newA = Math.round(freed / 2);
-			newB = freed - newA; // Ensure they sum correctly
-		} else {
-			// Proportional redistribution
-			const ratioA = current[otherKeys[0]] / otherSum;
-			newA = Math.max(0, Math.round(current[otherKeys[0]] - delta * ratioA));
-			newB = 100 - newValue - newA;
-
-			// Clamp newB and adjust newA if needed
-			if (newB < 0) {
-				newB = 0;
-				newA = 100 - newValue;
-			}
-		}
-
-		const result = { ...current, [which]: newValue, [otherKeys[0]]: newA, [otherKeys[1]]: newB };
-		onRatioChange(result.labour, result.military, result.spy);
+		onRatioChange(newRatios.labour, newRatios.military, newRatios.spy);
 	};
 
 	return (
-		<div className='border-t border-border bg-gray-900 px-4 py-3 text-gray-100'>
-			<div className='mx-auto flex max-w-md flex-col gap-3'>
-				<SliderRow
-					icon={<IconHammer className='h-4 w-4' />}
-					label='Labour'
-					value={labourRatio}
-					count={Math.floor(population * (labourRatio / 100))}
-					onChange={(v) => handleSliderChange('labour', v)}
-				/>
-				<SliderRow
-					icon={<IconShield className='h-4 w-4' />}
-					label='Military'
-					value={militaryRatio}
-					count={Math.floor(population * (militaryRatio / 100))}
-					onChange={(v) => handleSliderChange('military', v)}
-				/>
-				<SliderRow
-					icon={<IconSpy className='h-4 w-4' />}
-					label='Spy'
-					value={spyRatio}
-					count={Math.floor(population * (spyRatio / 100))}
-					onChange={(v) => handleSliderChange('spy', v)}
-				/>
+		<div className='rounded-lg border border-zinc-800 bg-zinc-900 p-3 space-y-2'>
+			<SliderRow
+				icon={<IconHammer className='h-3.5 w-3.5' />}
+				label='Labour'
+				value={labourRatio}
+				count={Math.floor(population * (labourRatio / 100))}
+				onChange={(v) => handleSliderChange('labour', v)}
+			/>
+			<SliderRow
+				icon={<IconShield className='h-3.5 w-3.5' />}
+				label='Military'
+				value={militaryRatio}
+				count={Math.floor(population * (militaryRatio / 100))}
+				onChange={(v) => handleSliderChange('military', v)}
+			/>
+			<SliderRow
+				icon={<IconSpy className='h-3.5 w-3.5' />}
+				label='Spies'
+				value={spyRatio}
+				count={Math.floor(population * (spyRatio / 100))}
+				onChange={(v) => handleSliderChange('spy', v)}
+			/>
+			{/* Idle row - display only */}
+			<div className='space-y-1'>
+				<div className='flex items-center justify-between text-zinc-400'>
+					<div className='flex items-center gap-1.5'>
+						<IconMoodEmpty className='h-3.5 w-3.5' />
+						<span className='text-xs'>Idle</span>
+					</div>
+					<span className='text-xs font-medium text-white'>
+						{idleRatio}% ({Math.floor(population * (idleRatio / 100))})
+					</span>
+				</div>
+				<div className='relative h-1 rounded-full bg-zinc-800'>
+					<div
+						className='absolute h-full rounded-full bg-white'
+						style={{ width: `${idleRatio}%` }}
+					/>
+				</div>
 			</div>
 		</div>
 	);
@@ -106,23 +100,17 @@ function SliderRow({
 	onChange: (v: number) => void;
 }) {
 	return (
-		<div className='flex items-center gap-3'>
-			<div className='flex w-20 items-center gap-2 text-gray-400'>
-				{icon}
-				<span className='text-sm'>{label}</span>
+		<div className='space-y-1'>
+			<div className='flex items-center justify-between text-zinc-400'>
+				<div className='flex items-center gap-1.5'>
+					{icon}
+					<span className='text-xs'>{label}</span>
+				</div>
+				<span className='text-xs font-medium text-white'>
+					{value}% ({count})
+				</span>
 			</div>
-			<div className='flex-1'>
-				<Slider
-					value={[value]}
-					min={0}
-					max={100}
-					step={1}
-					onValueChange={(vals: number[]) => onChange(vals[0])}
-				/>
-			</div>
-			<span className='w-20 text-right text-sm font-medium'>
-				{value}% ({count})
-			</span>
+			<Slider value={[value]} min={0} max={100} step={1} onValueChange={(vals: number[]) => onChange(vals[0])} />
 		</div>
 	);
 }

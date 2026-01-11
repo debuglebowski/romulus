@@ -1,15 +1,20 @@
 import { v } from 'convex/values';
-import type { Id } from './_generated/dataModel';
+
 import { mutation, query } from './_generated/server';
 import { auth } from './auth';
-import { coordKey, findPath } from './lib/hex';
+import { computeVisibleCoords, coordKey, findPath } from './lib/hex';
+
+import type { Id } from './_generated/dataModel';
 
 const TRAVEL_TIME_PER_HEX = 10000; // 10 seconds per hex
 
 export const getForGame = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
-		return ctx.db.query('armies').withIndex('by_gameId', (q) => q.eq('gameId', gameId)).collect();
+		return ctx.db
+			.query('armies')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
 	},
 });
 
@@ -27,24 +32,46 @@ export const moveArmy = mutation({
 	args: {
 		armyId: v.id('armies'),
 		targetTileId: v.id('tiles'),
+		count: v.optional(v.number()),
 	},
-	handler: async (ctx, { armyId, targetTileId }) => {
+	handler: async (ctx, { armyId, targetTileId, count }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const army = await ctx.db.get(armyId);
-		if (!army) throw new Error('Army not found');
+		if (!army) {
+			throw new Error('Army not found');
+		}
 
 		const player = await ctx.db.get(army.ownerId);
-		if (!player || player.userId !== userId) throw new Error('Not your army');
+		if (!player || player.userId !== userId) {
+			throw new Error('Not your army');
+		}
 
 		const currentTile = await ctx.db.get(army.tileId);
-		if (!currentTile) throw new Error('Current tile not found');
+		if (!currentTile) {
+			throw new Error('Current tile not found');
+		}
 
 		const targetTile = await ctx.db.get(targetTileId);
-		if (!targetTile) throw new Error('Target tile not found');
+		if (!targetTile) {
+			throw new Error('Target tile not found');
+		}
 
-		if (army.tileId === targetTileId) throw new Error('Already at target');
+		if (army.tileId === targetTileId) {
+			throw new Error('Already at target');
+		}
+
+		// Validate count
+		const unitsToMove = count ?? army.count;
+		if (unitsToMove < 1) {
+			throw new Error('Must move at least 1 unit');
+		}
+		if (unitsToMove > army.count) {
+			throw new Error('Not enough units');
+		}
 
 		// Get all tiles for pathfinding
 		const allTiles = await ctx.db
@@ -57,26 +84,51 @@ export const moveArmy = mutation({
 		// Can only traverse owned or neutral tiles (not enemy tiles except destination)
 		const canTraverse = (coord: { q: number; r: number }) => {
 			const tile = tileMap.get(coordKey(coord.q, coord.r));
-			if (!tile) return false;
+			if (!tile) {
+				return false;
+			}
 			// Can traverse if unowned or owned by self
 			// Can also traverse to enemy tile if it's the destination
-			if (coord.q === targetTile.q && coord.r === targetTile.r) return true;
+			if (coord.q === targetTile.q && coord.r === targetTile.r) {
+				return true;
+			}
 			return tile.ownerId === undefined || tile.ownerId === army.ownerId;
 		};
 
 		const path = findPath({ q: currentTile.q, r: currentTile.r }, { q: targetTile.q, r: targetTile.r }, canTraverse);
 
-		if (!path) throw new Error('No valid path to target');
+		if (!path) {
+			throw new Error('No valid path to target');
+		}
 
 		const now = Date.now();
 		const travelTime = path.length * TRAVEL_TIME_PER_HEX;
 
-		await ctx.db.patch(armyId, {
-			targetTileId,
-			path,
-			departureTime: now,
-			arrivalTime: now + travelTime,
-		});
+		if (unitsToMove < army.count) {
+			// Split the army: reduce original, create new moving army
+			await ctx.db.patch(armyId, {
+				count: army.count - unitsToMove,
+			});
+
+			await ctx.db.insert('armies', {
+				gameId: army.gameId,
+				ownerId: army.ownerId,
+				tileId: army.tileId,
+				count: unitsToMove,
+				targetTileId,
+				path,
+				departureTime: now,
+				arrivalTime: now + travelTime,
+			});
+		} else {
+			// Move the entire army
+			await ctx.db.patch(armyId, {
+				targetTileId,
+				path,
+				departureTime: now,
+				arrivalTime: now + travelTime,
+			});
+		}
 	},
 });
 
@@ -84,13 +136,19 @@ export const cancelMove = mutation({
 	args: { armyId: v.id('armies') },
 	handler: async (ctx, { armyId }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const army = await ctx.db.get(armyId);
-		if (!army) throw new Error('Army not found');
+		if (!army) {
+			throw new Error('Army not found');
+		}
 
 		const player = await ctx.db.get(army.ownerId);
-		if (!player || player.userId !== userId) throw new Error('Not your army');
+		if (!player || player.userId !== userId) {
+			throw new Error('Not your army');
+		}
 
 		if (!army.targetTileId || !army.departureTime || !army.arrivalTime || !army.path) {
 			throw new Error('Army not moving');
@@ -110,11 +168,11 @@ export const cancelMove = mutation({
 		if (currentPathHex) {
 			const tile = await ctx.db
 				.query('tiles')
-				.withIndex('by_gameId_coords', (q) =>
-					q.eq('gameId', army.gameId).eq('q', currentPathHex.q).eq('r', currentPathHex.r),
-				)
+				.withIndex('by_gameId_coords', (q) => q.eq('gameId', army.gameId).eq('q', currentPathHex.q).eq('r', currentPathHex.r))
 				.first();
-			if (tile) newTileId = tile._id;
+			if (tile) {
+				newTileId = tile._id;
+			}
 		}
 
 		await ctx.db.patch(armyId, {
@@ -134,7 +192,9 @@ export const setRallyPoint = mutation({
 	},
 	handler: async (ctx, { gameId, tileId }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) throw new Error('Not authenticated');
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -142,11 +202,17 @@ export const setRallyPoint = mutation({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) throw new Error('Not in game');
+		if (!player) {
+			throw new Error('Not in game');
+		}
 
 		const tile = await ctx.db.get(tileId);
-		if (!tile) throw new Error('Tile not found');
-		if (tile.ownerId !== player._id) throw new Error('Must set rally point on owned tile');
+		if (!tile) {
+			throw new Error('Tile not found');
+		}
+		if (tile.ownerId !== player._id) {
+			throw new Error('Must set rally point on owned tile');
+		}
 
 		await ctx.db.patch(player._id, { rallyPointTileId: tileId });
 	},
@@ -157,7 +223,9 @@ export const getVisibleForPlayer = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
 		const userId = await auth.getUserId(ctx);
-		if (!userId) return null;
+		if (!userId) {
+			return null;
+		}
 
 		const player = await ctx.db
 			.query('gamePlayers')
@@ -165,9 +233,14 @@ export const getVisibleForPlayer = query({
 			.filter((q) => q.eq(q.field('userId'), userId))
 			.first();
 
-		if (!player) return null;
+		if (!player) {
+			return null;
+		}
 
-		const armies = await ctx.db.query('armies').withIndex('by_gameId', (q) => q.eq('gameId', gameId)).collect();
+		const armies = await ctx.db
+			.query('armies')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
 
 		const allTiles = await ctx.db
 			.query('tiles')
@@ -176,34 +249,49 @@ export const getVisibleForPlayer = query({
 
 		const tileMap = new Map(allTiles.map((t) => [t._id, t]));
 
+		// Compute visible coordinates from player's owned tiles
+		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
+		const visibleCoords = computeVisibleCoords(ownedTiles);
+
 		const now = Date.now();
 
-		return armies.map((army) => {
-			const baseTile = tileMap.get(army.tileId);
-			if (!baseTile) return null;
+		return armies
+			.map((army) => {
+				const baseTile = tileMap.get(army.tileId);
+				if (!baseTile) {
+					return null;
+				}
 
-			let currentQ = baseTile.q;
-			let currentR = baseTile.r;
+				let currentQ = baseTile.q;
+				let currentR = baseTile.r;
 
-			// If moving, compute current position along path
-			if (army.targetTileId && army.departureTime && army.arrivalTime && army.path && army.path.length > 0) {
-				const elapsed = now - army.departureTime;
-				const totalTime = army.arrivalTime - army.departureTime;
-				const progress = Math.min(elapsed / totalTime, 1);
+				// If moving, compute current position along path
+				if (army.targetTileId && army.departureTime && army.arrivalTime && army.path && army.path.length > 0) {
+					const elapsed = now - army.departureTime;
+					const totalTime = army.arrivalTime - army.departureTime;
+					const progress = Math.min(elapsed / totalTime, 1);
 
-				// Which hex in the path are we at?
-				const pathIndex = Math.min(Math.floor(progress * army.path.length), army.path.length - 1);
-				const currentPathHex = army.path[pathIndex];
-				currentQ = currentPathHex.q;
-				currentR = currentPathHex.r;
-			}
+					// Which hex in the path are we at?
+					const pathIndex = Math.min(Math.floor(progress * army.path.length), army.path.length - 1);
+					const currentPathHex = army.path[pathIndex];
+					currentQ = currentPathHex.q;
+					currentR = currentPathHex.r;
+				}
 
-			return {
-				...army,
-				currentQ,
-				currentR,
-				isOwn: army.ownerId === player._id,
-			};
-		}).filter((a) => a !== null);
+				const isOwn = army.ownerId === player._id;
+
+				// Hide enemy armies that aren't on visible tiles
+				if (!isOwn && !visibleCoords.has(coordKey(currentQ, currentR))) {
+					return null;
+				}
+
+				return {
+					...army,
+					currentQ,
+					currentR,
+					isOwn,
+				};
+			})
+			.filter((a) => a !== null);
 	},
 });
