@@ -28,9 +28,9 @@ const KEYBOARD_PAN_SPEED = 0.3;
 // Height offset for buildings sitting on tiles
 const BUILDING_Y_OFFSET = 0.1;
 // Height offset for army units
-const ARMY_Y_OFFSET = 0.25;
+const ARMY_Y_OFFSET = 0.35;
 // Z offset to position armies at bottom of tile (positive Z = toward bottom in isometric)
-const ARMY_Z_OFFSET = 0.25;
+const ARMY_Z_OFFSET = 0.35;
 // Model-specific Y offsets to align tile bases (adjust these values to match model origins)
 const MODEL_Y_OFFSETS = {
 	grass: 0,
@@ -318,8 +318,8 @@ function HexTile({ tile, ownerColor, isSelected, isHovered, onClick, onPointerOv
 
 // Create shield silhouette shape (flat 2D, NO extrusion)
 const shieldIconShape = new THREE.Shape();
-const siw = 0.095; // shield icon half-width
-const sih = 0.13; // shield icon half-height
+const siw = 0.06; // shield icon half-width
+const sih = 0.085; // shield icon half-height
 shieldIconShape.moveTo(0, sih); // top center
 shieldIconShape.lineTo(siw, sih * 0.5); // top-right
 shieldIconShape.lineTo(siw, -sih * 0.3); // mid-right
@@ -402,14 +402,14 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 			{/* Combat indicator ring on ground */}
 			{army.isInCombat && (
 				<mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.005, 0]}>
-					<ringGeometry args={[0.12, 0.16, 32]} />
+					<ringGeometry args={[0.08, 0.11, 32]} />
 					<meshBasicMaterial color='#ef4444' transparent opacity={0.6} side={THREE.DoubleSide} />
 				</mesh>
 			)}
 
-			{/* Unit count badge */}
+			{/* Unit count label - inside shield */}
 			<Html
-				position={[0, 0.20, 0]}
+				position={[0, 0, 0.01]}
 				center
 				style={{
 					pointerEvents: 'none',
@@ -418,15 +418,11 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 			>
 				<div
 					style={{
-						background: 'rgba(0, 0, 0, 0.85)',
 						color: 'white',
-						fontSize: '11px',
+						fontSize: '12px',
 						fontWeight: 'bold',
-						padding: '2px 5px',
-						borderRadius: '3px',
-						border: `2px solid ${color}`,
+						textShadow: '0 0 3px #000, 0 0 5px #000',
 						whiteSpace: 'nowrap',
-						boxShadow: isSelected ? `0 0 8px ${color}` : 'none',
 					}}
 				>
 					{army.unitCount}
@@ -436,7 +432,7 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 			{/* HP bar (only show when damaged) */}
 			{showHpBar && (
 				<Html
-					position={[0, -0.18, 0]}
+					position={[0, -0.12, 0]}
 					center
 					style={{
 						pointerEvents: 'none',

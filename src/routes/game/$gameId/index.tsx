@@ -21,6 +21,19 @@ export const Route = createFileRoute('/game/$gameId/')({
 
 type SelectionMode = 'default' | 'move' | 'rally';
 
+function formatTime(ms: number): string {
+	if (ms <= 0) {
+		return '0s';
+	}
+	const seconds = Math.ceil(ms / 1000);
+	if (seconds < 60) {
+		return `${seconds}s`;
+	}
+	const minutes = Math.floor(seconds / 60);
+	const remainingSeconds = seconds % 60;
+	return `${minutes}m ${remainingSeconds}s`;
+}
+
 function GamePage() {
 	const { gameId } = Route.useParams();
 	const navigate = useNavigate();
@@ -36,6 +49,8 @@ function GamePage() {
 	const setRallyPointMutation = useMutation(api.armies.setRallyPoint);
 	const retreatArmyMutation = useMutation(api.armies.retreatArmy);
 	const buildCityMutation = useMutation(api.tiles.buildCity);
+	const moveCapitalMutation = useMutation(api.tiles.moveCapital);
+	const cancelCapitalMoveMutation = useMutation(api.tiles.cancelCapitalMove);
 	const abandonMutation = useMutation(api.games.abandon);
 
 	// Selection state
@@ -56,6 +71,9 @@ function GamePage() {
 		spy: number;
 	} | null>(null);
 	const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Time state for frozen overlay
+	const [now, setNow] = useState(Date.now());
 
 	// Sync local ratios with server when economy data loads
 	useEffect(() => {
@@ -461,6 +479,39 @@ function GamePage() {
 		[armies, tilesWithVisibility, myPlayer?._id, retreatArmyMutation],
 	);
 
+	// Move capital handler
+	const handleMoveCapitalHere = useCallback(async () => {
+		if (!selectedTileId) {
+			return;
+		}
+		try {
+			await moveCapitalMutation({ targetTileId: selectedTileId as Id<'tiles'> });
+			handleCancelSelection();
+		} catch (e) {
+			console.error('Failed to move capital:', e);
+		}
+	}, [selectedTileId, moveCapitalMutation, handleCancelSelection]);
+
+	// Cancel capital move handler
+	const handleCancelCapitalMove = useCallback(async () => {
+		try {
+			await cancelCapitalMoveMutation({ gameId: gameId as Id<'games'> });
+		} catch (e) {
+			console.error('Failed to cancel capital move:', e);
+		}
+	}, [gameId, cancelCapitalMoveMutation]);
+
+	// Update time every second when capital is moving
+	useEffect(() => {
+		if (!economy?.capitalMovingToTileId) {
+			return;
+		}
+		const interval = setInterval(() => {
+			setNow(Date.now());
+		}, 1000);
+		return () => clearInterval(interval);
+	}, [economy?.capitalMovingToTileId]);
+
 	// Menu handlers
 	const handleOpenLeaveDialog = useCallback(() => {
 		setLeaveDialogOpen(true);
@@ -575,6 +626,35 @@ function GamePage() {
 					</div>
 				)}
 
+				{/* Capital moving (frozen) overlay */}
+				{economy?.capitalMovingToTileId && economy.capitalMoveDepartureTime && economy.capitalMoveArrivalTime && (
+					<div className='absolute inset-0 bg-black/50 flex items-center justify-center z-10'>
+						<div className='bg-zinc-900 border border-zinc-800 rounded-lg p-6 text-center max-w-sm'>
+							<h2 className='text-xl font-bold text-white mb-2'>Capital Relocating</h2>
+							<p className='text-zinc-400 text-sm mb-4'>Your capital is moving. All actions are frozen until arrival.</p>
+							{(() => {
+								const timeRemaining = Math.max(0, economy.capitalMoveArrivalTime - now);
+								const totalTime = economy.capitalMoveArrivalTime - economy.capitalMoveDepartureTime;
+								const progress = totalTime > 0 ? Math.min(100, ((totalTime - timeRemaining) / totalTime) * 100) : 0;
+								return (
+									<>
+										<p className='text-2xl font-medium text-amber-400 mb-4'>{formatTime(timeRemaining)}</p>
+										<div className='w-full h-2 bg-zinc-700 rounded overflow-hidden mb-4'>
+											<div
+												className='h-full bg-purple-500 transition-all'
+												style={{ width: `${progress}%` }}
+											/>
+										</div>
+									</>
+								);
+							})()}
+							<Button variant='outline' onClick={handleCancelCapitalMove} className='w-full'>
+								Cancel Move
+							</Button>
+						</div>
+					</div>
+				)}
+
 				{/* Right panel overlay */}
 				<div className='absolute bottom-4 right-4 flex w-64 flex-col gap-4'>
 					{/* Ratio sliders on top */}
@@ -597,6 +677,7 @@ function GamePage() {
 						mode={mode}
 						moveUnitCount={moveUnitCount}
 						playerGold={economy?.gold ?? 0}
+						isCapitalMoving={!!economy?.capitalMovingToTileId}
 						onMoveUnitCountChange={setMoveUnitCount}
 						onSetRallyPoint={handleSetRallyPoint}
 						onCancelMove={handleCancelMove}
@@ -606,6 +687,7 @@ function GamePage() {
 						onCallHome={handleCallHome}
 						onBuildCity={handleBuildCity}
 						onRetreat={handleRetreat}
+						onMoveCapitalHere={handleMoveCapitalHere}
 					/>
 				</div>
 			</div>

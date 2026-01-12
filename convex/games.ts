@@ -658,6 +658,11 @@ export const setRatios = mutation({
 			throw new Error('Not in game');
 		}
 
+		// Block when capital is moving (player is frozen)
+		if (player.capitalMovingToTileId) {
+			throw new Error('Cannot change ratios while capital is relocating');
+		}
+
 		// Get current military units
 		const armies = await ctx.db
 			.query('armies')
@@ -785,6 +790,10 @@ export const getMyEconomy = query({
 			militaryRatio: player.militaryRatio ?? 0,
 			spyRatio: player.spyRatio ?? 0,
 			startedAt: game.startedAt ?? Date.now(),
+			// Capital movement state
+			capitalMovingToTileId: player.capitalMovingToTileId,
+			capitalMoveDepartureTime: player.capitalMoveDepartureTime,
+			capitalMoveArrivalTime: player.capitalMoveArrivalTime,
 		};
 	},
 });

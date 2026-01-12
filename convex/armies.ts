@@ -110,6 +110,11 @@ export const moveArmy = mutation({
 			throw new Error('Not your army');
 		}
 
+		// Block when capital is moving (player is frozen)
+		if (player.capitalMovingToTileId) {
+			throw new Error('Cannot move armies while capital is relocating');
+		}
+
 		// Get army's units
 		const armyUnits = await ctx.db
 			.query('units')
@@ -337,6 +342,11 @@ export const setRallyPoint = mutation({
 
 		if (!player) {
 			throw new Error('Not in game');
+		}
+
+		// Block when capital is moving (player is frozen)
+		if (player.capitalMovingToTileId) {
+			throw new Error('Cannot set rally point while capital is relocating');
 		}
 
 		const tile = await ctx.db.get(tileId);

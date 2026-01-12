@@ -1,4 +1,4 @@
-import { IconBuilding, IconFlag, IconHome, IconLogout, IconRoute, IconShield, IconX } from '@tabler/icons-react';
+import { IconBuilding, IconCrown, IconFlag, IconHome, IconLogout, IconRoute, IconShield, IconX } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import { Slider } from '@/ui/_shadcn/slider';
@@ -28,6 +28,7 @@ interface ContextPanelProps {
 	mode: 'default' | 'move' | 'rally';
 	moveUnitCount?: number;
 	playerGold?: number;
+	isCapitalMoving?: boolean;
 	onMoveUnitCountChange?: (count: number) => void;
 	onSetRallyPoint?: () => void;
 	onCancelMove?: () => void;
@@ -37,6 +38,7 @@ interface ContextPanelProps {
 	onCallHome?: (armyId: string) => void;
 	onBuildCity?: () => void;
 	onRetreat?: (armyId: string) => void;
+	onMoveCapitalHere?: () => void;
 }
 
 export function ContextPanel({
@@ -47,6 +49,7 @@ export function ContextPanel({
 	mode,
 	moveUnitCount,
 	playerGold = 0,
+	isCapitalMoving = false,
 	onMoveUnitCountChange,
 	onSetRallyPoint,
 	onCancelMove,
@@ -56,6 +59,7 @@ export function ContextPanel({
 	onCallHome,
 	onBuildCity,
 	onRetreat,
+	onMoveCapitalHere,
 }: ContextPanelProps) {
 	const [now, setNow] = useState(Date.now());
 
@@ -159,7 +163,7 @@ export function ContextPanel({
 			)}
 
 			{/* Build City button for owned empty tiles */}
-			{selectedTile && isOwnTile && selectedTile.type === 'empty' && mode === 'default' && (
+			{selectedTile && isOwnTile && selectedTile.type === 'empty' && mode === 'default' && !isCapitalMoving && (
 				<div className='border-t border-zinc-800 pt-2'>
 					<button
 						onClick={onBuildCity}
@@ -174,6 +178,19 @@ export function ContextPanel({
 							Need {CITY_BUILD_COST - Math.floor(playerGold)} more gold
 						</p>
 					)}
+				</div>
+			)}
+
+			{/* Move Capital button for owned cities */}
+			{selectedTile && isOwnTile && selectedTile.type === 'city' && mode === 'default' && !isCapitalMoving && (
+				<div className='border-t border-zinc-800 pt-2'>
+					<button
+						onClick={onMoveCapitalHere}
+						className='w-full flex items-center justify-center gap-1.5 rounded bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
+					>
+						<IconCrown size={14} />
+						Move Capital Here
+					</button>
 				</div>
 			)}
 

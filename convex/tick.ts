@@ -209,6 +209,27 @@ export const processTick = internalMutation({
 				populationAccumulator: newPopAccumulator,
 				militaryAccumulator: newMilAccumulator,
 			});
+
+			// Process capital movement completion
+			if (player.capitalMovingToTileId && player.capitalMoveArrivalTime && now >= player.capitalMoveArrivalTime) {
+				const targetTile = tileMap.get(player.capitalMovingToTileId);
+				const capitalTile = playerTiles.find((t) => t.type === 'capital');
+
+				if (targetTile && capitalTile) {
+					// Change old capital to city
+					await ctx.db.patch(capitalTile._id, { type: 'city' });
+					// Change destination city to capital
+					await ctx.db.patch(targetTile._id, { type: 'capital' });
+				}
+
+				// Clear movement fields
+				await ctx.db.patch(player._id, {
+					capitalMovingToTileId: undefined,
+					capitalMoveDepartureTime: undefined,
+					capitalMoveArrivalTime: undefined,
+					capitalMovePath: undefined,
+				});
+			}
 		}
 
 		// Process army movement and arrivals

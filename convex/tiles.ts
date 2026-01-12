@@ -2,9 +2,10 @@ import { v } from 'convex/values';
 
 import { internalMutation, mutation, query } from './_generated/server';
 import { auth } from './auth';
-import { computeLineOfSight, coordKey, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
+import { computeLineOfSight, coordKey, findPath, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
 
 const CITY_BUILD_COST = 50;
+const CAPITAL_TRAVEL_TIME_PER_HEX = 30000; // 30 seconds per hex
 
 export const generateMap = internalMutation({
 	args: {
@@ -153,6 +154,11 @@ export const buildCity = mutation({
 			throw new Error('Not in game');
 		}
 
+		// Block when capital is moving (player is frozen)
+		if (player.capitalMovingToTileId) {
+			throw new Error('Cannot build city while capital is relocating');
+		}
+
 		if (tile.ownerId !== player._id) {
 			throw new Error('Must own the tile to build a city');
 		}
@@ -285,5 +291,160 @@ export const updatePlayerMemory = internalMutation({
 				});
 			}
 		}
+	},
+});
+
+export const moveCapital = mutation({
+	args: { targetTileId: v.id('tiles') },
+	handler: async (ctx, { targetTileId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const targetTile = await ctx.db.get(targetTileId);
+		if (!targetTile) {
+			throw new Error('Target tile not found');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', targetTile.gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) {
+			throw new Error('Not in game');
+		}
+
+		if (player.eliminatedAt) {
+			throw new Error('Cannot move capital while eliminated');
+		}
+
+		// Check if already moving capital
+		if (player.capitalMovingToTileId) {
+			throw new Error('Capital is already moving');
+		}
+
+		// Target must be an owned city (not capital, not empty)
+		if (targetTile.ownerId !== player._id) {
+			throw new Error('Must own the target city');
+		}
+		if (targetTile.type !== 'city') {
+			throw new Error('Can only move capital to a city');
+		}
+
+		// Find current capital
+		const allTiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', targetTile.gameId))
+			.collect();
+
+		const capitalTile = allTiles.find((t) => t.ownerId === player._id && t.type === 'capital');
+		if (!capitalTile) {
+			throw new Error('No capital found');
+		}
+
+		// Build tile map for pathfinding
+		const tileMap = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
+
+		// Can only traverse owned tiles for capital movement
+		const canTraverse = (coord: { q: number; r: number }) => {
+			const tile = tileMap.get(coordKey(coord.q, coord.r));
+			if (!tile) {
+				return false;
+			}
+			return tile.ownerId === player._id;
+		};
+
+		const path = findPath({ q: capitalTile.q, r: capitalTile.r }, { q: targetTile.q, r: targetTile.r }, canTraverse);
+		if (!path || path.length === 0) {
+			throw new Error('No valid path to target city');
+		}
+
+		const now = Date.now();
+		const travelTime = path.length * CAPITAL_TRAVEL_TIME_PER_HEX;
+
+		await ctx.db.patch(player._id, {
+			capitalMovingToTileId: targetTileId,
+			capitalMoveDepartureTime: now,
+			capitalMoveArrivalTime: now + travelTime,
+			capitalMovePath: path,
+		});
+	},
+});
+
+export const cancelCapitalMove = mutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) {
+			throw new Error('Not in game');
+		}
+
+		if (!player.capitalMovingToTileId || !player.capitalMoveDepartureTime || !player.capitalMoveArrivalTime || !player.capitalMovePath) {
+			throw new Error('Capital is not moving');
+		}
+
+		const now = Date.now();
+		const elapsed = now - player.capitalMoveDepartureTime;
+		const totalTime = player.capitalMoveArrivalTime - player.capitalMoveDepartureTime;
+		const progress = Math.min(elapsed / totalTime, 1);
+
+		// Find which hex the capital is currently at
+		const pathIndex = Math.floor(progress * player.capitalMovePath.length);
+		const passedCoords = player.capitalMovePath.slice(0, pathIndex);
+
+		// Get all tiles to find cities along the route
+		const allTiles = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		const tileByCoord = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
+
+		// Find current capital tile
+		const capitalTile = allTiles.find((t) => t.ownerId === player._id && t.type === 'capital');
+		if (!capitalTile) {
+			throw new Error('No capital found');
+		}
+
+		// Find the nearest city along the passed route (iterate backwards from current position)
+		let targetCityTile = null;
+		for (let i = passedCoords.length - 1; i >= 0; i--) {
+			const coord = passedCoords[i];
+			const tile = tileByCoord.get(coordKey(coord.q, coord.r));
+			if (tile && tile.type === 'city' && tile.ownerId === player._id) {
+				targetCityTile = tile;
+				break;
+			}
+		}
+
+		if (targetCityTile) {
+			// Move capital to the nearest city along the route
+			// Old capital becomes a city
+			await ctx.db.patch(capitalTile._id, { type: 'city' });
+			// Target city becomes capital
+			await ctx.db.patch(targetCityTile._id, { type: 'capital' });
+		}
+		// If no city was passed, capital stays where it is (original capital)
+
+		// Clear movement fields
+		await ctx.db.patch(player._id, {
+			capitalMovingToTileId: undefined,
+			capitalMoveDepartureTime: undefined,
+			capitalMoveArrivalTime: undefined,
+			capitalMovePath: undefined,
+		});
 	},
 });

@@ -76,6 +76,12 @@ const schema = defineSchema({
 		rallyPointTileId: v.optional(v.id('tiles')),
 		militaryAccumulator: v.optional(v.number()),
 
+		// Capital movement tracking
+		capitalMovingToTileId: v.optional(v.id('tiles')),
+		capitalMoveDepartureTime: v.optional(v.number()),
+		capitalMoveArrivalTime: v.optional(v.number()),
+		capitalMovePath: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
+
 		eliminatedAt: v.optional(v.number()),
 		eliminationReason: v.optional(
 			v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit')),
