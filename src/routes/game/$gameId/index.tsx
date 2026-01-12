@@ -12,14 +12,14 @@ import { RatioSliders } from '@/ui/components/ratio-sliders';
 import { api } from '../../../../convex/_generated/api';
 import { computeHorizon, coordKey, findPath } from '../../../../convex/lib/hex';
 
-import type { ArmyData, TileData } from '@/ui/components/hex-map';
+import type { ArmyData, SpyData, TileData } from '@/ui/components/hex-map';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 export const Route = createFileRoute('/game/$gameId/')({
 	component: GamePage,
 });
 
-type SelectionMode = 'default' | 'move' | 'rally';
+type SelectionMode = 'default' | 'move' | 'rally' | 'spy-move';
 
 function formatTime(ms: number): string {
 	if (ms <= 0) {
@@ -43,6 +43,7 @@ function GamePage() {
 	const economy = useQuery(api.games.getMyEconomy, { gameId: gameId as Id<'games'> });
 	const user = useQuery(api.users.currentUser);
 	const combatTileIds = useQuery(api.armies.getTilesWithCombat, { gameId: gameId as Id<'games'> });
+	const spiesData = useQuery(api.spies.getVisibleForPlayer, { gameId: gameId as Id<'games'> });
 	const setRatiosMutation = useMutation(api.games.setRatios);
 	const moveArmyMutation = useMutation(api.armies.moveArmy);
 	const cancelMoveMutation = useMutation(api.armies.cancelMove);
@@ -52,10 +53,13 @@ function GamePage() {
 	const moveCapitalMutation = useMutation(api.tiles.moveCapital);
 	const cancelCapitalMoveMutation = useMutation(api.tiles.cancelCapitalMove);
 	const abandonMutation = useMutation(api.games.abandon);
+	const moveSpyMutation = useMutation(api.spies.moveSpy);
+	const cancelSpyMoveMutation = useMutation(api.spies.cancelMove);
 
 	// Selection state
 	const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
 	const [selectedArmyId, setSelectedArmyId] = useState<string | null>(null);
+	const [selectedSpyId, setSelectedSpyId] = useState<string | null>(null);
 	const [mode, setMode] = useState<SelectionMode>('default');
 	const [moveUnitCount, setMoveUnitCount] = useState<number>(0);
 	const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
@@ -227,9 +231,30 @@ function GamePage() {
 		}));
 	}, [armiesData]);
 
+	// Transform spies data
+	const spies = useMemo((): SpyData[] => {
+		if (!spiesData) {
+			return [];
+		}
+		return spiesData.map((s) => ({
+			_id: s._id,
+			ownerId: s.ownerId,
+			tileId: s.tileId,
+			currentQ: s.currentQ,
+			currentR: s.currentR,
+			isOwn: s.isOwn,
+			isRevealed: s.isRevealed,
+			path: s.path ?? undefined,
+			targetTileId: s.targetTileId ?? undefined,
+			departureTime: s.departureTime ?? undefined,
+			arrivalTime: s.arrivalTime ?? undefined,
+		}));
+	}, [spiesData]);
+
 	// Get selected objects
 	const selectedTile = tilesWithVisibility.find((t) => t._id === selectedTileId);
 	const selectedArmy = armies.find((a) => a._id === selectedArmyId);
+	const selectedSpy = spies.find((s) => s._id === selectedSpyId);
 	const isOwnTile = selectedTile?.ownerId === myPlayer?._id;
 
 	// Find stationary armies on the selected tile (for tile-based army selection)
@@ -240,40 +265,83 @@ function GamePage() {
 		return armies.filter((a) => a.currentQ === selectedTile.q && a.currentR === selectedTile.r && !a.targetTileId);
 	}, [selectedTile, armies]);
 
-	// Compute movement path preview
+	// Find spies on the selected tile (own spies only)
+	const spiesOnTile = useMemo(() => {
+		if (!selectedTile) {
+			return [];
+		}
+		return spies
+			.filter((s) => s.currentQ === selectedTile.q && s.currentR === selectedTile.r && !s.targetTileId)
+			.map((s) => ({ _id: s._id, isRevealed: s.isRevealed }));
+	}, [selectedTile, spies]);
+
+	// Get spy intel for selected tile (if player has spy there)
+	const spyIntelQuery = useQuery(
+		api.spies.getIntelForTile,
+		selectedTile && !isOwnTile && spiesOnTile.length > 0
+			? { gameId: gameId as Id<'games'>, tileId: selectedTile._id as Id<'tiles'> }
+			: 'skip',
+	);
+	const spyIntel = spyIntelQuery ?? null;
+
+	// Compute movement path preview (for army or spy)
 	const movementPath = useMemo(() => {
-		if (mode !== 'move' || !selectedArmyId || !selectedTileId) {
+		if (!selectedTileId) {
 			return undefined;
 		}
 
-		const army = armies.find((a) => a._id === selectedArmyId);
 		const targetTile = tilesWithVisibility.find((t) => t._id === selectedTileId);
-		if (!army || !targetTile) {
+		if (!targetTile) {
 			return undefined;
 		}
 
 		// Build tile map for pathfinding
 		const tileMap = new Map(tilesWithVisibility.map((t) => [coordKey(t.q, t.r), t]));
 
-		const canTraverse = (coord: { q: number; r: number }) => {
-			const tile = tileMap.get(coordKey(coord.q, coord.r));
-			if (!tile || tile.visibility !== 'visible') {
-				return false;
+		if (mode === 'move' && selectedArmyId) {
+			const army = armies.find((a) => a._id === selectedArmyId);
+			if (!army) {
+				return undefined;
 			}
-			// Mountains are impassable
-			if (tile.type === 'mountain') {
-				return false;
-			}
-			// Allow destination even if enemy
-			if (coord.q === targetTile.q && coord.r === targetTile.r) {
-				return true;
-			}
-			return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
-		};
 
-		const path = findPath({ q: army.currentQ, r: army.currentR }, { q: targetTile.q, r: targetTile.r }, canTraverse);
-		return path ?? undefined;
-	}, [mode, selectedArmyId, selectedTileId, armies, tilesWithVisibility, myPlayer?._id]);
+			const canTraverse = (coord: { q: number; r: number }) => {
+				const tile = tileMap.get(coordKey(coord.q, coord.r));
+				if (!tile || tile.visibility !== 'visible') {
+					return false;
+				}
+				// Mountains are impassable
+				if (tile.type === 'mountain') {
+					return false;
+				}
+				// Allow destination even if enemy
+				if (coord.q === targetTile.q && coord.r === targetTile.r) {
+					return true;
+				}
+				return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
+			};
+
+			const path = findPath({ q: army.currentQ, r: army.currentR }, { q: targetTile.q, r: targetTile.r }, canTraverse);
+			return path ?? undefined;
+		}
+
+		if (mode === 'spy-move' && selectedSpyId) {
+			const spy = spies.find((s) => s._id === selectedSpyId);
+			if (!spy) {
+				return undefined;
+			}
+
+			// Spies can traverse any tile
+			const canTraverse = (coord: { q: number; r: number }) => {
+				const tile = tileMap.get(coordKey(coord.q, coord.r));
+				return tile !== undefined && tile.visibility === 'visible';
+			};
+
+			const path = findPath({ q: spy.currentQ, r: spy.currentR }, { q: targetTile.q, r: targetTile.r }, canTraverse);
+			return path ?? undefined;
+		}
+
+		return undefined;
+	}, [mode, selectedArmyId, selectedSpyId, selectedTileId, armies, spies, tilesWithVisibility, myPlayer?._id]);
 
 	// Tile click handler
 	const handleTileClick = useCallback(
@@ -316,6 +384,30 @@ function GamePage() {
 				setMode('default');
 				setMoveUnitCount(0);
 				// Don't clear selection - keep army selected to show movement progress
+			} else if (mode === 'spy-move' && selectedSpyId) {
+				// Move spy to clicked tile
+				const spy = spies.find((s) => s._id === selectedSpyId);
+				if (spy) {
+					const tileMap = new Map(tilesWithVisibility.map((t) => [coordKey(t.q, t.r), t]));
+					const canTraverse = (coord: { q: number; r: number }) => {
+						const tile = tileMap.get(coordKey(coord.q, coord.r));
+						return tile !== undefined && tile.visibility === 'visible';
+					};
+					const path = findPath({ q: spy.currentQ, r: spy.currentR }, { q, r }, canTraverse);
+
+					if (path && path.length > 0) {
+						try {
+							await moveSpyMutation({
+								spyId: selectedSpyId as Id<'spies'>,
+								targetTileId: tileId as Id<'tiles'>,
+							});
+							// Keep spy selected after initiating move
+						} catch (e) {
+							console.error('Failed to move spy:', e);
+						}
+					}
+				}
+				setMode('default');
 			} else if (mode === 'rally') {
 				// Set rally point handled by context panel button
 				setSelectedTileId(tileId);
@@ -323,15 +415,25 @@ function GamePage() {
 				// Default selection
 				setSelectedTileId(tileId);
 				setSelectedArmyId(null);
+				setSelectedSpyId(null);
 			}
 		},
-		[mode, selectedArmyId, armies, tilesWithVisibility, myPlayer?._id, moveArmyMutation, moveUnitCount],
+		[mode, selectedArmyId, selectedSpyId, armies, spies, tilesWithVisibility, myPlayer?._id, moveArmyMutation, moveSpyMutation, moveUnitCount],
 	);
 
 	// Army click handler
 	const handleArmyClick = useCallback((armyId: string) => {
 		setSelectedArmyId(armyId);
 		setSelectedTileId(null);
+		setSelectedSpyId(null);
+		setMode('default');
+	}, []);
+
+	// Spy click handler
+	const handleSpyClick = useCallback((spyId: string) => {
+		setSelectedSpyId(spyId);
+		setSelectedTileId(null);
+		setSelectedArmyId(null);
 		setMode('default');
 	}, []);
 
@@ -352,6 +454,12 @@ function GamePage() {
 		setMode('rally');
 	}, []);
 
+	// Spy move mode handler
+	const handleSetSpyMoveMode = useCallback((spyId: string) => {
+		setSelectedSpyId(spyId);
+		setMode('spy-move');
+	}, []);
+
 	const handleCancelMove = useCallback(async () => {
 		if (!selectedArmyId) {
 			return;
@@ -362,6 +470,18 @@ function GamePage() {
 			console.error('Failed to cancel move:', e);
 		}
 	}, [selectedArmyId, cancelMoveMutation]);
+
+	// Cancel spy move handler
+	const handleCancelSpyMove = useCallback(async () => {
+		if (!selectedSpyId) {
+			return;
+		}
+		try {
+			await cancelSpyMoveMutation({ spyId: selectedSpyId as Id<'spies'> });
+		} catch (e) {
+			console.error('Failed to cancel spy move:', e);
+		}
+	}, [selectedSpyId, cancelSpyMoveMutation]);
 
 	const handleSetRallyPoint = useCallback(async () => {
 		if (!selectedTileId) {
@@ -381,6 +501,7 @@ function GamePage() {
 	const handleCancelSelection = useCallback(() => {
 		setSelectedTileId(null);
 		setSelectedArmyId(null);
+		setSelectedSpyId(null);
 		setMode('default');
 		setMoveUnitCount(0);
 	}, []);
@@ -601,13 +722,16 @@ function GamePage() {
 							players={game.players}
 							currentPlayerId={myPlayer?._id ?? ''}
 							armies={armies}
+							spies={spies}
 							combatTileIds={combatTileIds ?? []}
 							selectedTileId={selectedTileId ?? undefined}
 							selectedArmyId={selectedArmyId ?? undefined}
+							selectedSpyId={selectedSpyId ?? undefined}
 							rallyPointTileId={myPlayer?.rallyPointTileId ?? undefined}
 							movementPath={movementPath}
 							onTileClick={handleTileClick}
 							onArmyClick={handleArmyClick}
+							onSpyClick={handleSpyClick}
 							onBackgroundClick={handleCancelSelection}
 						/>
 					</div>
@@ -672,7 +796,10 @@ function GamePage() {
 					<ContextPanel
 						selectedTile={selectedTile}
 						selectedArmy={selectedArmy}
+						selectedSpy={selectedSpy}
 						stationaryArmiesOnTile={stationaryArmiesOnTile}
+						spiesOnTile={spiesOnTile}
+						spyIntel={spyIntel}
 						isOwnTile={isOwnTile}
 						mode={mode}
 						moveUnitCount={moveUnitCount}
@@ -681,8 +808,10 @@ function GamePage() {
 						onMoveUnitCountChange={setMoveUnitCount}
 						onSetRallyPoint={handleSetRallyPoint}
 						onCancelMove={handleCancelMove}
+						onCancelSpyMove={handleCancelSpyMove}
 						onCancelSelection={handleCancelSelection}
 						onSetMoveMode={handleSetMoveMode}
+						onSetSpyMoveMode={handleSetSpyMoveMode}
 						onSetRallyMode={handleSetRallyMode}
 						onCallHome={handleCallHome}
 						onBuildCity={handleBuildCity}

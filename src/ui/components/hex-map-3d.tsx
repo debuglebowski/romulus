@@ -73,6 +73,20 @@ export interface ArmyData {
 	isInCombat: boolean;
 }
 
+export interface SpyData {
+	_id: string;
+	ownerId: string;
+	tileId: string;
+	currentQ: number;
+	currentR: number;
+	isOwn: boolean;
+	isRevealed: boolean;
+	path?: { q: number; r: number }[];
+	targetTileId?: string;
+	departureTime?: number;
+	arrivalTime?: number;
+}
+
 interface Player {
 	_id: string;
 	color: string;
@@ -84,13 +98,16 @@ interface HexMap3DProps {
 	players: Player[];
 	currentPlayerId: string;
 	armies?: ArmyData[];
+	spies?: SpyData[];
 	combatTileIds?: string[];
 	selectedTileId?: string;
 	selectedArmyId?: string;
+	selectedSpyId?: string;
 	rallyPointTileId?: string;
 	movementPath?: { q: number; r: number }[];
 	onTileClick?: (tileId: string, q: number, r: number) => void;
 	onArmyClick?: (armyId: string) => void;
+	onSpyClick?: (spyId: string) => void;
 	onBackgroundClick?: () => void;
 }
 
@@ -464,6 +481,146 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 }
 
 // ============================================================================
+// Spy Icon Shape (hooded figure / cloak shape)
+// ============================================================================
+
+const spyIconShape = new THREE.Shape();
+// Create a cloak/hood shape
+spyIconShape.moveTo(0, 0.08); // Top of hood
+spyIconShape.lineTo(0.05, 0.04); // Right side of hood
+spyIconShape.lineTo(0.04, -0.04); // Right shoulder
+spyIconShape.lineTo(0.02, -0.08); // Right bottom
+spyIconShape.lineTo(-0.02, -0.08); // Left bottom
+spyIconShape.lineTo(-0.04, -0.04); // Left shoulder
+spyIconShape.lineTo(-0.05, 0.04); // Left side of hood
+spyIconShape.lineTo(0, 0.08); // Back to top
+
+// Y offset for spies (slightly different from armies to avoid overlap)
+const SPY_Y_OFFSET = 0.35;
+// X offset to position spies to the right of armies
+const SPY_X_OFFSET = 0.15;
+
+// ============================================================================
+// Billboard Spy Component
+// ============================================================================
+
+interface BillboardSpyProps {
+	spy: SpyData;
+	tiles: TileData[];
+	now: number;
+	isSelected: boolean;
+	count: number;
+	onClick: (e: ThreeEvent<MouseEvent>) => void;
+}
+
+function BillboardSpy({ spy, tiles, now, isSelected, count, onClick }: BillboardSpyProps) {
+	// Calculate position (with interpolation for moving spies)
+	const position = useMemo<[number, number, number]>(() => {
+		// If not moving, use current position
+		if (!spy.targetTileId || !spy.departureTime || !spy.arrivalTime || !spy.path || spy.path.length === 0) {
+			const [x, y, z] = axialToWorld(spy.currentQ, spy.currentR, SPY_Y_OFFSET);
+			return [x + SPY_X_OFFSET, y, z + ARMY_Z_OFFSET];
+		}
+
+		// Calculate interpolated position along path
+		const elapsed = Math.max(0, now - spy.departureTime);
+		const totalTime = spy.arrivalTime - spy.departureTime;
+		const pathLength = spy.path.length;
+		const timePerHex = totalTime / pathLength;
+
+		// Which segment are we in?
+		const segmentIndex = Math.min(Math.floor(elapsed / timePerHex), pathLength - 1);
+		const segmentProgress = Math.min((elapsed - segmentIndex * timePerHex) / timePerHex, 1);
+
+		// Get origin hex
+		const originTile = tiles.find((t) => t._id === spy.tileId);
+		const originHex = originTile ? { q: originTile.q, r: originTile.r } : spy.path[0];
+
+		// Determine from/to hexes for current segment
+		const fromHex = segmentIndex === 0 ? originHex : spy.path[segmentIndex - 1];
+		const toHex = spy.path[segmentIndex];
+
+		// Interpolate position with offsets
+		const from = axialToWorld(fromHex.q, fromHex.r, SPY_Y_OFFSET);
+		const to = axialToWorld(toHex.q, toHex.r, SPY_Y_OFFSET);
+
+		return [
+			from[0] + SPY_X_OFFSET + (to[0] - from[0]) * segmentProgress,
+			from[1] + (to[1] - from[1]) * segmentProgress,
+			from[2] + ARMY_Z_OFFSET + (to[2] - from[2]) * segmentProgress,
+		];
+	}, [spy, tiles, now]);
+
+	// Color based on revealed status
+	const spyColor = spy.isRevealed ? '#ef4444' : '#8b5cf6'; // Red if revealed, purple if hidden
+	const outlineColor = isSelected ? '#ffffff' : '#1f2937';
+
+	return (
+		<group position={position}>
+			{/* Billboard spy icon - always faces camera */}
+			<Billboard>
+				{/* Dark outline (slightly larger, behind) */}
+				<mesh position={[0, 0, -0.001]} scale={[1.2, 1.2, 1]}>
+					<shapeGeometry args={[spyIconShape]} />
+					<meshBasicMaterial color={outlineColor} side={THREE.DoubleSide} />
+				</mesh>
+
+				{/* Spy fill */}
+				<mesh onClick={onClick}>
+					<shapeGeometry args={[spyIconShape]} />
+					<meshBasicMaterial color={spyColor} side={THREE.DoubleSide} />
+				</mesh>
+			</Billboard>
+
+			{/* Spy count label - inside icon */}
+			<Html
+				position={[0, 0, 0.01]}
+				center
+				style={{
+					pointerEvents: 'none',
+					userSelect: 'none',
+				}}
+			>
+				<div
+					style={{
+						color: 'white',
+						fontSize: '12px',
+						fontWeight: 'bold',
+						textShadow: '0 0 3px #000, 0 0 5px #000',
+						whiteSpace: 'nowrap',
+					}}
+				>
+					{count}
+				</div>
+			</Html>
+
+			{/* Revealed indicator - exclamation mark above */}
+			{spy.isRevealed && (
+				<Html
+					position={[0, 0.12, 0]}
+					center
+					style={{
+						pointerEvents: 'none',
+						userSelect: 'none',
+					}}
+				>
+					<div
+						style={{
+							color: '#ef4444',
+							fontSize: '10px',
+							fontWeight: 'bold',
+							textShadow: '0 0 3px #000, 0 0 5px #000',
+						}}
+					>
+						!
+					</div>
+				</Html>
+			)}
+		</group>
+	);
+}
+
+// ============================================================================
 // Movement Path Line Component
 // ============================================================================
 
@@ -638,12 +795,15 @@ interface HexSceneProps {
 	tiles: TileData[];
 	players: Player[];
 	armies: ArmyData[];
+	spies: SpyData[];
 	selectedTileId?: string;
 	selectedArmyId?: string;
+	selectedSpyId?: string;
 	rallyPointTileId?: string;
 	movementPath?: { q: number; r: number }[];
 	onTileClick?: (tileId: string, q: number, r: number) => void;
 	onArmyClick?: (armyId: string) => void;
+	onSpyClick?: (spyId: string) => void;
 	onBackgroundClick?: () => void;
 	setHoveredTileId: (id: string | null) => void;
 }
@@ -652,12 +812,15 @@ function HexScene({
 	tiles,
 	players,
 	armies,
+	spies,
 	selectedTileId,
 	selectedArmyId,
+	selectedSpyId,
 	rallyPointTileId,
 	movementPath,
 	onTileClick,
 	onArmyClick,
+	onSpyClick,
 	onBackgroundClick,
 	setHoveredTileId,
 }: HexSceneProps) {
@@ -708,17 +871,18 @@ function HexScene({
 	// All tiles are now rendered (unexplored shows as water)
 	const visibleTiles = tiles;
 
-	// Check if there are any moving armies for animation
+	// Check if there are any moving armies or spies for animation
 	const hasMovingArmies = armies.some((a) => a.targetTileId && a.departureTime && a.arrivalTime && a.path?.length);
+	const hasMovingSpies = spies.some((s) => s.targetTileId && s.departureTime && s.arrivalTime && s.path?.length);
 
-	// Update time for smooth animation of moving armies
+	// Update time for smooth animation of moving armies/spies
 	useEffect(() => {
-		if (!hasMovingArmies) {
+		if (!hasMovingArmies && !hasMovingSpies) {
 			return;
 		}
 		const interval = setInterval(() => setNow(Date.now()), 50); // 20fps for smooth movement
 		return () => clearInterval(interval);
-	}, [hasMovingArmies]);
+	}, [hasMovingArmies, hasMovingSpies]);
 
 	return (
 		<>
@@ -817,6 +981,43 @@ function HexScene({
 				);
 			})}
 
+			{/* Render spies (only own spies are visible - backend filters) */}
+			{/* Group spies by tile and render one icon per tile with count */}
+			{(() => {
+				// Group spies by current tile coordinates
+				const spyGroups = new Map<string, SpyData[]>();
+				for (const spy of spies) {
+					const key = `${spy.currentQ},${spy.currentR}`;
+					const group = spyGroups.get(key) ?? [];
+					group.push(spy);
+					spyGroups.set(key, group);
+				}
+
+				return Array.from(spyGroups.values()).map((group) => {
+					// Use first spy as representative for the group
+					const spy = group[0];
+					const count = group.length;
+					const isSelected = group.some((s) => s._id === selectedSpyId);
+
+					return (
+						<BillboardSpy
+							key={`spy-group-${spy.currentQ}-${spy.currentR}`}
+							spy={spy}
+							isSelected={isSelected}
+							tiles={tiles}
+							now={now}
+							count={count}
+							onClick={(e) => {
+								e.stopPropagation();
+								if (spy.isOwn) {
+									onSpyClick?.(spy._id);
+								}
+							}}
+						/>
+					);
+				});
+			})()}
+
 			{/* Movement path preview */}
 			{movementPath && movementPath.length > 0 && <MovementPath path={movementPath} />}
 
@@ -872,12 +1073,15 @@ export function HexMap3D({
 	tiles,
 	players,
 	armies = [],
+	spies = [],
 	selectedTileId,
 	selectedArmyId,
+	selectedSpyId,
 	rallyPointTileId,
 	movementPath,
 	onTileClick,
 	onArmyClick,
+	onSpyClick,
 	onBackgroundClick,
 }: HexMap3DProps) {
 	const [hoveredTileId, setHoveredTileId] = useState<string | null>(null);
@@ -898,12 +1102,15 @@ export function HexMap3D({
 				tiles={tiles}
 				players={players}
 				armies={armies}
+				spies={spies}
 				selectedTileId={selectedTileId}
 				selectedArmyId={selectedArmyId}
+				selectedSpyId={selectedSpyId}
 				rallyPointTileId={rallyPointTileId}
 				movementPath={movementPath}
 				onTileClick={onTileClick}
 				onArmyClick={onArmyClick}
+				onSpyClick={onSpyClick}
 				onBackgroundClick={onBackgroundClick}
 				setHoveredTileId={setHoveredTileId}
 			/>

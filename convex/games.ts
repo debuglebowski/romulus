@@ -697,7 +697,7 @@ export const setRatios = mutation({
 
 				if (existingRallyArmy) {
 					await ctx.db.patch(existingRallyArmy._id, {
-						count: existingRallyArmy.count + toConscript,
+						count: (existingRallyArmy.count ?? 0) + toConscript,
 					});
 				} else {
 					await ctx.db.insert('armies', {
@@ -713,21 +713,24 @@ export const setRatios = mutation({
 			const capitalArmy = armies.find((a) => a.tileId === capitalTile?._id && !a.targetTileId);
 
 			if (capitalArmy) {
-				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalArmy.count);
+				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalArmy.count ?? 0);
 				newPopulation += toDemobilize;
 
-				if (toDemobilize >= capitalArmy.count) {
+				if (toDemobilize >= (capitalArmy.count ?? 0)) {
 					await ctx.db.delete(capitalArmy._id);
 				} else {
 					await ctx.db.patch(capitalArmy._id, {
-						count: capitalArmy.count - toDemobilize,
+						count: (capitalArmy.count ?? 0) - toDemobilize,
 					});
 				}
 			}
 		}
 
+		// Guard against NaN before saving (defensive)
+		const safePop = Number.isFinite(newPopulation) ? newPopulation : 20;
+
 		await ctx.db.patch(player._id, {
-			population: newPopulation,
+			population: safePop,
 			labourRatio: args.labourRatio,
 			militaryRatio: args.militaryRatio,
 			spyRatio: args.spyRatio,
@@ -758,8 +761,12 @@ export const getMyEconomy = query({
 			return null;
 		}
 
-		// Calculate derived values
-		const labourers = Math.floor((player.population ?? 0) * ((player.labourRatio ?? 100) / 100));
+		// Calculate derived values with NaN guards
+		const safePop = Number.isFinite(player.population) ? (player.population ?? 0) : 0;
+		const safeGold = Number.isFinite(player.gold) ? (player.gold ?? 0) : 0;
+		const safeLabourRatio = Number.isFinite(player.labourRatio) ? (player.labourRatio ?? 100) : 100;
+
+		const labourers = Math.floor(safePop * (safeLabourRatio / 100));
 		const goldRate = labourers / 5;
 
 		const tiles = await ctx.db
@@ -780,15 +787,15 @@ export const getMyEconomy = query({
 		const totalMilitary = armies.reduce((sum, a) => sum + (a.count ?? 0), 0);
 
 		return {
-			gold: player.gold ?? 0,
+			gold: safeGold,
 			goldRate,
-			population: player.population ?? 0,
+			population: safePop,
 			totalMilitary,
-			totalUnits: (player.population ?? 0) + totalMilitary,
+			totalUnits: safePop + totalMilitary,
 			popCap,
-			labourRatio: player.labourRatio ?? 100,
-			militaryRatio: player.militaryRatio ?? 0,
-			spyRatio: player.spyRatio ?? 0,
+			labourRatio: safeLabourRatio,
+			militaryRatio: Number.isFinite(player.militaryRatio) ? (player.militaryRatio ?? 0) : 0,
+			spyRatio: Number.isFinite(player.spyRatio) ? (player.spyRatio ?? 0) : 0,
 			startedAt: game.startedAt ?? Date.now(),
 			// Capital movement state
 			capitalMovingToTileId: player.capitalMovingToTileId,

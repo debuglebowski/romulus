@@ -7,6 +7,13 @@ import type { Id } from './_generated/dataModel';
 
 const TICK_INTERVAL_MS = 1000; // 1 second per tick
 const UPKEEP_PER_UNIT = 0.1; // gold/sec per military unit
+const UPKEEP_PER_SPY = 0.2; // gold/sec per spy
+
+// Spy detection constants (per tick = per second)
+// Military detecting spies: 1% per unit per minute = 0.01/60 per unit per tick
+const MILITARY_DETECTION_RATE = 0.01 / 60;
+// Spies detecting spies: 4% per spy per minute = 0.04/60 per spy per tick
+const SPY_DETECTION_RATE = 0.04 / 60;
 
 // Combat constants
 const UNIT_BASE_HP = 100;
@@ -48,6 +55,11 @@ export const processTick = internalMutation({
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
 
+		const allSpies = await ctx.db
+			.query('spies')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
 		const tileMap = new Map(allTiles.map((t) => [t._id, t]));
 
 		// Build unit counts per army
@@ -69,6 +81,26 @@ export const processTick = internalMutation({
 		const eliminatedPlayerIds: string[] = [];
 
 		for (const player of players) {
+			// Auto-repair any corrupted numeric fields (NaN values)
+			const needsRepair =
+				!Number.isFinite(player.population) ||
+				!Number.isFinite(player.gold) ||
+				!Number.isFinite(player.labourRatio);
+
+			if (needsRepair) {
+				await ctx.db.patch(player._id, {
+					population: Number.isFinite(player.population) ? player.population : 20,
+					gold: Number.isFinite(player.gold) ? player.gold : 0,
+					populationAccumulator: 0,
+					militaryAccumulator: 0,
+					spyAccumulator: 0,
+					labourRatio: Number.isFinite(player.labourRatio) ? player.labourRatio : 100,
+					militaryRatio: Number.isFinite(player.militaryRatio) ? player.militaryRatio : 0,
+					spyRatio: Number.isFinite(player.spyRatio) ? player.spyRatio : 0,
+				});
+				continue; // Skip this tick to let repair take effect
+			}
+
 			if (player.population === undefined || player.labourRatio === undefined) {
 				continue;
 			}
@@ -88,9 +120,14 @@ export const processTick = internalMutation({
 				const armyUnits = unitsByArmy.get(a._id) ?? [];
 				return sum + armyUnits.length;
 			}, 0);
-			const upkeepCost = totalMilitary * UPKEEP_PER_UNIT;
+			const militaryUpkeep = totalMilitary * UPKEEP_PER_UNIT;
+
+			// Count spies for upkeep
+			const playerSpies = allSpies.filter((s) => s.ownerId === player._id);
+			const spyUpkeep = playerSpies.length * UPKEEP_PER_SPY;
 
 			// Gold: 1 gold/sec per 5 labourers - upkeep
+			const upkeepCost = militaryUpkeep + spyUpkeep;
 			const goldPerTick = labourers / 5 - upkeepCost;
 			const newGold = (player.gold ?? 0) + goldPerTick;
 
@@ -203,11 +240,43 @@ export const processTick = internalMutation({
 				}
 			}
 
+			// Spy spawning
+			const spyPopulation = Math.floor(player.population * ((player.spyRatio ?? 0) / 100));
+			let newSpyAccumulator = player.spyAccumulator ?? 0;
+			if (spyPopulation > 0 && player.rallyPointTileId) {
+				// Spawn rate: 1 spy per 60 seconds per spy pop assigned
+				const spawnRate = spyPopulation / 60;
+				newSpyAccumulator += spawnRate;
+
+				if (newSpyAccumulator >= 1) {
+					const spiesToSpawn = Math.floor(newSpyAccumulator);
+					newSpyAccumulator -= spiesToSpawn;
+
+					// Create spies at rally point
+					for (let i = 0; i < spiesToSpawn; i++) {
+						await ctx.db.insert('spies', {
+							gameId,
+							ownerId: player._id,
+							tileId: player.rallyPointTileId,
+							isRevealed: false,
+						});
+					}
+				}
+			}
+
+			// Guard against NaN before saving (defensive)
+			const safeGold = Number.isFinite(newGold) ? newGold : 0;
+			const safePop = Number.isFinite(newPopulation) ? newPopulation : 20;
+			const safePopAcc = Number.isFinite(newPopAccumulator) ? newPopAccumulator : 0;
+			const safeMilAcc = Number.isFinite(newMilAccumulator) ? newMilAccumulator : 0;
+			const safeSpyAcc = Number.isFinite(newSpyAccumulator) ? newSpyAccumulator : 0;
+
 			await ctx.db.patch(player._id, {
-				gold: newGold,
-				population: newPopulation,
-				populationAccumulator: newPopAccumulator,
-				militaryAccumulator: newMilAccumulator,
+				gold: safeGold,
+				population: safePop,
+				populationAccumulator: safePopAcc,
+				militaryAccumulator: safeMilAcc,
+				spyAccumulator: safeSpyAcc,
 			});
 
 			// Process capital movement completion
@@ -260,6 +329,32 @@ export const processTick = internalMutation({
 
 				// Update our local reference
 				army.tileId = army.targetTileId;
+			}
+		}
+
+		// Process spy movement arrivals
+		for (const spy of allSpies) {
+			if (!spy.targetTileId || !spy.arrivalTime || !spy.path) {
+				continue;
+			}
+
+			if (now >= spy.arrivalTime) {
+				const targetTile = tileMap.get(spy.targetTileId);
+				if (!targetTile) {
+					continue;
+				}
+
+				// Move spy to target tile
+				await ctx.db.patch(spy._id, {
+					tileId: spy.targetTileId,
+					targetTileId: undefined,
+					path: undefined,
+					departureTime: undefined,
+					arrivalTime: undefined,
+				});
+
+				// Update our local reference
+				spy.tileId = spy.targetTileId;
 			}
 		}
 
@@ -430,6 +525,84 @@ export const processTick = internalMutation({
 			}
 		}
 
+		// Reload spies after movement
+		const spiesAfterMove = await ctx.db
+			.query('spies')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+
+		// Build map of tiles -> spies on that tile (stationary only)
+		const spiesByTile = new Map<string, typeof spiesAfterMove>();
+		for (const spy of spiesAfterMove) {
+			if (spy.targetTileId) {
+				continue; // Moving spies can't be detected or detect
+			}
+			const tileSpies = spiesByTile.get(spy.tileId) ?? [];
+			tileSpies.push(spy);
+			spiesByTile.set(spy.tileId, tileSpies);
+		}
+
+		// Process spy detection
+		const spiesDeleted = new Set<string>();
+
+		for (const spy of spiesAfterMove) {
+			if (spy.targetTileId) {
+				continue; // Moving spies can't be detected
+			}
+			if (spiesDeleted.has(spy._id)) {
+				continue;
+			}
+
+			// Get armies on this tile (stationary only)
+			const tileArmies = armiesByTile.get(spy.tileId) ?? [];
+			const stationaryArmies = tileArmies.filter((a) => !a.targetTileId && !armiesDeleted.has(a._id));
+
+			// Get enemy spies on this tile
+			const tileSpies = spiesByTile.get(spy.tileId) ?? [];
+
+			// Count enemy military units on this tile
+			let enemyUnitCount = 0;
+			for (const army of stationaryArmies) {
+				if (army.ownerId !== spy.ownerId) {
+					const armyUnits = freshUnitsByArmy.get(army._id) ?? [];
+					enemyUnitCount += armyUnits.length;
+				}
+			}
+
+			// Count enemy spies on this tile
+			let enemySpyCount = 0;
+			for (const otherSpy of tileSpies) {
+				if (otherSpy.ownerId !== spy.ownerId && !spiesDeleted.has(otherSpy._id)) {
+					enemySpyCount++;
+				}
+			}
+
+			// Calculate detection chances
+			// Military detection: 1% per unit per minute = kills spy
+			const militaryDetectionChance = 1 - Math.pow(1 - MILITARY_DETECTION_RATE, enemyUnitCount);
+			// Spy detection: 4% per spy per minute = reveals spy
+			const spyDetectionChance = 1 - Math.pow(1 - SPY_DETECTION_RATE, enemySpyCount);
+
+			// Check if detected by military (killed)
+			if (enemyUnitCount > 0 && Math.random() < militaryDetectionChance) {
+				await ctx.db.delete(spy._id);
+				spiesDeleted.add(spy._id);
+				continue;
+			}
+
+			// Check if revealed spy is on tile with enemy military (killed)
+			if (spy.isRevealed && enemyUnitCount > 0) {
+				await ctx.db.delete(spy._id);
+				spiesDeleted.add(spy._id);
+				continue;
+			}
+
+			// Check if detected by enemy spy (revealed)
+			if (!spy.isRevealed && enemySpyCount > 0 && Math.random() < spyDetectionChance) {
+				await ctx.db.patch(spy._id, { isRevealed: true });
+			}
+		}
+
 		// Process eliminations (capital captured)
 		for (const eliminatedId of eliminatedPlayerIds) {
 			const eliminated = players.find((p) => p._id === eliminatedId);
@@ -464,6 +637,12 @@ export const processTick = internalMutation({
 					await ctx.db.delete(unit._id);
 				}
 				await ctx.db.delete(army._id);
+			}
+
+			// Delete eliminated player's spies
+			const eliminatedSpies = spiesAfterMove.filter((s) => s.ownerId === eliminatedId);
+			for (const spy of eliminatedSpies) {
+				await ctx.db.delete(spy._id);
 			}
 		}
 
@@ -507,6 +686,12 @@ export const processTick = internalMutation({
 						await ctx.db.delete(unit._id);
 					}
 					await ctx.db.delete(army._id);
+				}
+
+				// Delete player's spies
+				const playerSpiesDebt = spiesAfterMove.filter((s) => s.ownerId === player._id);
+				for (const spy of playerSpiesDebt) {
+					await ctx.db.delete(spy._id);
 				}
 			}
 		}

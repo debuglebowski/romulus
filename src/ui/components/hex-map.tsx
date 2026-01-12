@@ -60,6 +60,20 @@ export interface ArmyData {
 	isInCombat: boolean;
 }
 
+export interface SpyData {
+	_id: string;
+	ownerId: string;
+	tileId: string;
+	currentQ: number;
+	currentR: number;
+	isOwn: boolean;
+	isRevealed: boolean;
+	path?: { q: number; r: number }[];
+	targetTileId?: string;
+	departureTime?: number;
+	arrivalTime?: number;
+}
+
 interface HexMapProps {
 	tiles: TileData[];
 	players: Player[];

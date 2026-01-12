@@ -75,6 +75,7 @@ const schema = defineSchema({
 		spyRatio: v.optional(v.number()),
 		rallyPointTileId: v.optional(v.id('tiles')),
 		militaryAccumulator: v.optional(v.number()),
+		spyAccumulator: v.optional(v.number()),
 
 		// Capital movement tracking
 		capitalMovingToTileId: v.optional(v.id('tiles')),
@@ -119,6 +120,22 @@ const schema = defineSchema({
 	})
 		.index('by_gameId', ['gameId'])
 		.index('by_armyId', ['armyId']),
+
+	spies: defineTable({
+		gameId: v.id('games'),
+		ownerId: v.id('gamePlayers'),
+		tileId: v.id('tiles'),
+		// Movement (null = stationary)
+		targetTileId: v.optional(v.id('tiles')),
+		path: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
+		departureTime: v.optional(v.number()),
+		arrivalTime: v.optional(v.number()),
+		// Detection
+		isRevealed: v.boolean(), // permanent once revealed
+	})
+		.index('by_gameId', ['gameId'])
+		.index('by_tileId', ['tileId'])
+		.index('by_ownerId', ['ownerId']),
 
 	gameEvents: defineTable({
 		gameId: v.id('games'),

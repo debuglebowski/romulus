@@ -1,9 +1,9 @@
-import { IconBuilding, IconCrown, IconFlag, IconHome, IconLogout, IconRoute, IconShield, IconX } from '@tabler/icons-react';
+import { IconBuilding, IconCrown, IconEye, IconFlag, IconHome, IconLogout, IconRoute, IconShield, IconX } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import { Slider } from '@/ui/_shadcn/slider';
 
-import type { ArmyData, TileData } from './hex-map';
+import type { ArmyData, SpyData, TileData } from './hex-map';
 
 const CITY_BUILD_COST = 50;
 
@@ -20,20 +20,31 @@ function formatTime(ms: number): string {
 	return `${minutes}m ${remainingSeconds}s`;
 }
 
+interface SpyIntel {
+	armyCount: number;
+	unitCount: number;
+	tileOwnerId?: string;
+}
+
 interface ContextPanelProps {
 	selectedTile?: TileData;
 	selectedArmy?: ArmyData;
+	selectedSpy?: SpyData;
 	stationaryArmiesOnTile?: ArmyData[];
+	spiesOnTile?: { _id: string; isRevealed: boolean }[];
+	spyIntel?: SpyIntel | null;
 	isOwnTile: boolean;
-	mode: 'default' | 'move' | 'rally';
+	mode: 'default' | 'move' | 'rally' | 'spy-move';
 	moveUnitCount?: number;
 	playerGold?: number;
 	isCapitalMoving?: boolean;
 	onMoveUnitCountChange?: (count: number) => void;
 	onSetRallyPoint?: () => void;
 	onCancelMove?: () => void;
+	onCancelSpyMove?: () => void;
 	onCancelSelection?: () => void;
 	onSetMoveMode?: (armyId: string) => void;
+	onSetSpyMoveMode?: (spyId: string) => void;
 	onSetRallyMode?: () => void;
 	onCallHome?: (armyId: string) => void;
 	onBuildCity?: () => void;
@@ -44,7 +55,10 @@ interface ContextPanelProps {
 export function ContextPanel({
 	selectedTile,
 	selectedArmy,
+	selectedSpy,
 	stationaryArmiesOnTile = [],
+	spiesOnTile = [],
+	spyIntel,
 	isOwnTile,
 	mode,
 	moveUnitCount,
@@ -53,8 +67,10 @@ export function ContextPanel({
 	onMoveUnitCountChange,
 	onSetRallyPoint,
 	onCancelMove,
+	onCancelSpyMove,
 	onCancelSelection,
 	onSetMoveMode,
+	onSetSpyMoveMode,
 	onSetRallyMode,
 	onCallHome,
 	onBuildCity,
@@ -108,10 +124,10 @@ export function ContextPanel({
 		};
 	})();
 
-	if (!selectedTile && !selectedArmy) {
+	if (!selectedTile && !selectedArmy && !selectedSpy) {
 		return (
 			<div className='rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2'>
-				<p className='text-sm text-zinc-500'>Click a tile or army to select</p>
+				<p className='text-sm text-zinc-500'>Click a tile, army, or spy to select</p>
 			</div>
 		);
 	}
@@ -190,6 +206,61 @@ export function ContextPanel({
 					>
 						<IconCrown size={14} />
 						Move Capital Here
+					</button>
+				</div>
+			)}
+
+			{/* Spy Intel section - shows intel from player's spies on enemy tiles */}
+			{selectedTile && !isOwnTile && spyIntel && mode === 'default' && (
+				<div className='border-t border-zinc-800 pt-2 space-y-1'>
+					<div className='flex items-center gap-1.5 text-xs text-purple-400'>
+						<IconEye size={14} />
+						<span>Intel</span>
+					</div>
+					<div className='text-xs text-zinc-300 pl-5 space-y-0.5'>
+						<div className='flex justify-between'>
+							<span>Armies:</span>
+							<span className='text-white font-medium'>{spyIntel.armyCount}</span>
+						</div>
+						<div className='flex justify-between'>
+							<span>Units:</span>
+							<span className='text-white font-medium'>{spyIntel.unitCount}</span>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Spies on tile section */}
+			{selectedTile && spiesOnTile.length > 0 && mode !== 'rally' && mode !== 'spy-move' && (
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs'>
+						<IconEye size={14} className='text-purple-400' />
+						<span className='text-white'>{spiesOnTile.length} {spiesOnTile.length === 1 ? 'spy' : 'spies'}</span>
+						{spiesOnTile.some((s) => s.isRevealed) && (
+							<span className='text-red-400 text-[10px]'>
+								({spiesOnTile.filter((s) => s.isRevealed).length} revealed)
+							</span>
+						)}
+					</div>
+					{/* Spy move button */}
+					{mode === 'default' && spiesOnTile.length > 0 && (
+						<button
+							onClick={() => onSetSpyMoveMode?.(spiesOnTile[0]._id)}
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
+						>
+							<IconRoute size={14} />
+							Move Spy
+						</button>
+					)}
+				</div>
+			)}
+
+			{/* Spy move mode UI */}
+			{mode === 'spy-move' && (
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<p className='text-xs text-purple-400'>Select destination for spy</p>
+					<button onClick={onCancelSelection} className='w-full rounded bg-zinc-700 px-2 py-1.5 text-xs text-white hover:bg-zinc-600'>
+						Cancel
 					</button>
 				</div>
 			)}
@@ -281,7 +352,10 @@ export function ContextPanel({
 									min={1}
 									max={selectedArmy.unitCount}
 									step={1}
-									onValueChange={(vals: number[]) => onMoveUnitCountChange?.(vals[0])}
+									onValueChange={(value) => {
+										const vals = Array.isArray(value) ? value : [value];
+										onMoveUnitCountChange?.(vals[0]);
+									}}
 								/>
 							</div>
 							<button onClick={onCancelSelection} className='w-full rounded bg-zinc-700 px-2 py-1.5 text-xs text-white hover:bg-zinc-600'>
@@ -341,6 +415,29 @@ export function ContextPanel({
 					{selectedArmy.isOwn && selectedArmy.targetTileId && mode === 'default' && (
 						<button
 							onClick={onCancelMove}
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
+						>
+							<IconX size={14} />
+							Cancel Move
+						</button>
+					)}
+				</div>
+			)}
+
+			{/* Selected spy info (directly selected moving spy) */}
+			{selectedSpy && (
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs'>
+						<IconEye size={14} className={selectedSpy.isRevealed ? 'text-red-400' : 'text-purple-400'} />
+						<span className='text-white'>Spy</span>
+						{selectedSpy.targetTileId && <span className='text-purple-400'>(moving)</span>}
+						{selectedSpy.isRevealed && <span className='text-red-400'>(revealed)</span>}
+					</div>
+
+					{/* Cancel move button for moving spy */}
+					{selectedSpy.isOwn && selectedSpy.targetTileId && mode === 'default' && (
+						<button
+							onClick={onCancelSpyMove}
 							className='w-full flex items-center justify-center gap-1.5 rounded bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
 						>
 							<IconX size={14} />
