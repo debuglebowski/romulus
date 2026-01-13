@@ -28,13 +28,23 @@ const schema = defineSchema({
 		statGamesPlayed: v.optional(v.number()),
 		statWins: v.optional(v.number()),
 		statTimePlayed: v.optional(v.number()),
+
+		// Tutorial
+		tutorialCompleted: v.optional(v.boolean()),
+		tutorialStep: v.optional(v.number()),
+		tutorialSkipped: v.optional(v.boolean()),
 	}).index('by_username', ['username']),
 
 	games: defineTable({
 		name: v.string(),
 		hostId: v.id('users'),
 		maxPlayers: v.number(),
-		status: v.union(v.literal('waiting'), v.literal('starting'), v.literal('inProgress'), v.literal('finished')),
+		status: v.union(
+			v.literal('waiting'),
+			v.literal('starting'),
+			v.literal('inProgress'),
+			v.literal('finished'),
+		),
 		startedAt: v.optional(v.number()),
 		finishedAt: v.optional(v.number()),
 		currentTick: v.optional(v.number()),
@@ -79,7 +89,9 @@ const schema = defineSchema({
 		capitalMovePath: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
 
 		eliminatedAt: v.optional(v.number()),
-		eliminationReason: v.optional(v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit'))),
+		eliminationReason: v.optional(
+			v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit')),
+		),
 		finishPosition: v.optional(v.number()),
 		statTimeLasted: v.optional(v.number()),
 		statPeakCities: v.optional(v.number()),
@@ -149,79 +161,6 @@ const schema = defineSchema({
 	})
 		.index('by_gameId_playerId', ['gameId', 'playerId'])
 		.index('by_gameId_playerId_coords', ['gameId', 'playerId', 'q', 'r']),
-
-	playerUpgrades: defineTable({
-		gameId: v.id('games'),
-		playerId: v.id('gamePlayers'),
-		upgradeId: v.string(),
-		purchasedAt: v.number(),
-	})
-		.index('by_gameId', ['gameId'])
-		.index('by_playerId', ['playerId'])
-		.index('by_playerId_upgradeId', ['playerId', 'upgradeId']),
-
-	// Capital intel progress - tracks how long a spy has been at an enemy capital
-	// Intel tiers: 3min gold, 6min pop, 9min upgrades, 12min armies, 15min spies
-	capitalIntelProgress: defineTable({
-		gameId: v.id('games'),
-		spyOwnerId: v.id('gamePlayers'), // The player gathering intel
-		targetPlayerId: v.id('gamePlayers'), // The capital owner being spied on
-		startedAt: v.number(), // When spy first arrived at capital
-		currentTier: v.number(), // 0-5, which intel tier has been reached
-	})
-		.index('by_gameId', ['gameId'])
-		.index('by_spyOwnerId', ['spyOwnerId'])
-		.index('by_spyOwnerId_targetPlayerId', ['spyOwnerId', 'targetPlayerId']),
-
-	// Known enemy upgrades - tracks which enemy upgrades a player has discovered
-	// Revealed through: capital intel (9min tier) or combat
-	knownEnemyUpgrades: defineTable({
-		gameId: v.id('games'),
-		playerId: v.id('gamePlayers'), // The player who knows the intel
-		enemyPlayerId: v.id('gamePlayers'), // The enemy whose upgrade was revealed
-		upgradeId: v.string(), // The upgrade that was revealed
-		revealedAt: v.number(),
-		revealSource: v.union(v.literal('capitalIntel'), v.literal('combat')),
-	})
-		.index('by_gameId', ['gameId'])
-		.index('by_playerId', ['playerId'])
-		.index('by_playerId_enemyPlayerId', ['playerId', 'enemyPlayerId']),
-
-	// City allegiance - tracks loyalty scores per team for each city
-	// Used for spy-based city flipping mechanic
-	cityAllegiance: defineTable({
-		gameId: v.id('games'),
-		tileId: v.id('tiles'), // The city tile
-		teamId: v.id('gamePlayers'), // The team/player this score belongs to
-		score: v.number(), // 0-100, owner starts at 100
-	})
-		.index('by_gameId', ['gameId'])
-		.index('by_tileId', ['tileId'])
-		.index('by_gameId_tileId', ['gameId', 'tileId']),
-
-	// Alliances - tracks diplomatic relationships between players
-	alliances: defineTable({
-		gameId: v.id('games'),
-		player1Id: v.id('gamePlayers'), // The player who sent the invite
-		player2Id: v.id('gamePlayers'), // The player who received the invite
-		status: v.union(v.literal('pending'), v.literal('active')),
-		createdAt: v.number(),
-	})
-		.index('by_gameId', ['gameId'])
-		.index('by_player1Id', ['player1Id'])
-		.index('by_player2Id', ['player2Id'])
-		.index('by_gameId_status', ['gameId', 'status']),
-
-	// Alliance sharing - tracks what each player shares with their ally
-	// Asymmetric: each player controls their own sharing toggles independently
-	allianceSharing: defineTable({
-		allianceId: v.id('alliances'),
-		playerId: v.id('gamePlayers'), // The player granting this sharing
-		sharingType: v.union(v.literal('vision'), v.literal('gold'), v.literal('upgrades'), v.literal('armyPositions'), v.literal('spyIntel')),
-		enabled: v.boolean(),
-	})
-		.index('by_allianceId', ['allianceId'])
-		.index('by_playerId', ['playerId']),
 });
 
 export default schema;

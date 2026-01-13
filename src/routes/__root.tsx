@@ -2,7 +2,7 @@ import { useAuthActions } from '@convex-dev/auth/react';
 import { IconHome, IconLogout, IconSettings } from '@tabler/icons-react';
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useConvexAuth, useMutation, useQuery } from 'convex/react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Avatar, AvatarFallback } from '@/ui/_shadcn/avatar';
 import {
@@ -16,6 +16,7 @@ import {
 } from '@/ui/_shadcn/dropdown-menu';
 import { AuthForm } from '@/ui/components/auth-form';
 import { SettingsModal } from '@/ui/components/settings-modal';
+import { TutorialOverlay } from '@/ui/components/tutorial/tutorial-overlay';
 
 import { api } from '../../convex/_generated/api';
 
@@ -47,6 +48,9 @@ function RootLayout() {
 		[navigate],
 	);
 
+	// Tutorial overlay state
+	const [tutorialOpen, setTutorialOpen] = useState(false);
+
 	// Check if we're in an active game (not lobby or results)
 	const isInGame = /^\/game\/[^/]+\/?$/.test(location.pathname);
 
@@ -69,6 +73,19 @@ function RootLayout() {
 			navigate({ to: '/setup' });
 		}
 	}, [isAuthenticated, user, navigate]);
+
+	// Show tutorial for first-time users after setup is complete
+	useEffect(() => {
+		if (
+			isAuthenticated &&
+			user &&
+			user.username &&
+			user.tutorialCompleted !== true &&
+			user.tutorialSkipped !== true
+		) {
+			setTutorialOpen(true);
+		}
+	}, [isAuthenticated, user]);
 
 	if (isLoading) {
 		return (
@@ -133,7 +150,21 @@ function RootLayout() {
 				<Outlet />
 			</main>
 
-			<SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+			<SettingsModal
+				open={settingsOpen}
+				onOpenChange={setSettingsOpen}
+				onReplayTutorial={() => {
+					setSettingsOpen(false);
+					setTutorialOpen(true);
+				}}
+			/>
+
+			{/* Tutorial overlay for first-time users */}
+			<TutorialOverlay
+				open={tutorialOpen}
+				onOpenChange={setTutorialOpen}
+				initialStep={user?.tutorialStep ?? 0}
+			/>
 		</div>
 	);
 }

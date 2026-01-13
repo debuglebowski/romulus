@@ -36,6 +36,9 @@ export const getOrCreate = mutation({
 				statGamesPlayed: 0,
 				statWins: 0,
 				statTimePlayed: 0,
+				tutorialCompleted: false,
+				tutorialStep: 0,
+				tutorialSkipped: false,
 			});
 		}
 
@@ -127,5 +130,72 @@ export const getStats = query({
 			wins: user.statWins ?? 0,
 			timePlayed: user.statTimePlayed ?? 0,
 		};
+	},
+});
+
+export const getTutorialStatus = query({
+	args: {},
+	handler: async (ctx) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			return null;
+		}
+
+		const user = await ctx.db.get(userId);
+		if (!user) {
+			return null;
+		}
+
+		return {
+			completed: user.tutorialCompleted ?? false,
+			step: user.tutorialStep ?? 0,
+			skipped: user.tutorialSkipped ?? false,
+		};
+	},
+});
+
+export const updateTutorialStep = mutation({
+	args: { step: v.number() },
+	handler: async (ctx, args) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		if (args.step < 0) {
+			throw new Error('Step cannot be negative');
+		}
+
+		await ctx.db.patch(userId, { tutorialStep: args.step });
+	},
+});
+
+export const completeTutorial = mutation({
+	args: {},
+	handler: async (ctx) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		await ctx.db.patch(userId, {
+			tutorialCompleted: true,
+			tutorialSkipped: false,
+		});
+	},
+});
+
+export const skipTutorial = mutation({
+	args: {},
+	handler: async (ctx) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		await ctx.db.patch(userId, {
+			tutorialCompleted: true,
+			tutorialSkipped: true,
+		});
 	},
 });
