@@ -19,10 +19,13 @@ document.addEventListener('keydown', (e) => {
 });
 
 import { ConvexAuthProvider } from '@convex-dev/auth/react';
-import { RouterProvider, createRouter } from '@tanstack/react-router';
+import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { ConvexReactClient } from 'convex/react';
+import { ThemeProvider } from 'next-themes';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+
+import { Toaster } from '@/ui/_shadcn/sonner';
 
 import { routeTree } from './routeTree.gen';
 
@@ -38,8 +41,11 @@ declare module '@tanstack/react-router' {
 
 createRoot(document.getElementById('root') as HTMLElement).render(
 	<StrictMode>
-		<ConvexAuthProvider client={convex}>
-			<RouterProvider router={router} />
-		</ConvexAuthProvider>
+		<ThemeProvider attribute='class' defaultTheme='dark' disableTransitionOnChange>
+			<ConvexAuthProvider client={convex}>
+				<RouterProvider router={router} />
+				<Toaster position='top-right' />
+			</ConvexAuthProvider>
+		</ThemeProvider>
 	</StrictMode>,
 );

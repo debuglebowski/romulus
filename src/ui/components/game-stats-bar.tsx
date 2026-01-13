@@ -1,12 +1,7 @@
-import { IconCoin, IconDoorExit, IconMenu2, IconSettings, IconUsers } from '@tabler/icons-react';
+import { IconCoin, IconDoorExit, IconMenu2, IconPlayerPause, IconSettings, IconUsersGroup, IconUsers } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@/ui/_shadcn/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/_shadcn/dropdown-menu';
 
 interface Player {
 	_id: string;
@@ -23,8 +18,13 @@ interface GameStatsBarProps {
 	startedAt: number;
 	players?: Player[];
 	activePlayers?: number;
+	alliedPlayerIds?: string[];
+	pendingAllianceCount?: number;
+	isPaused?: boolean;
 	onLeaveGame?: () => void;
 	onOpenSettings?: () => void;
+	onOpenAlliances?: () => void;
+	onPauseGame?: () => void;
 }
 
 export function GameStatsBar({
@@ -35,9 +35,15 @@ export function GameStatsBar({
 	startedAt,
 	players,
 	activePlayers,
+	alliedPlayerIds = [],
+	pendingAllianceCount = 0,
+	isPaused = false,
 	onLeaveGame,
 	onOpenSettings,
+	onOpenAlliances,
+	onPauseGame,
 }: GameStatsBarProps) {
+	const alliedSet = new Set(alliedPlayerIds);
 	const [elapsed, setElapsed] = useState(0);
 
 	useEffect(() => {
@@ -59,7 +65,10 @@ export function GameStatsBar({
 				<div className='flex items-center gap-2'>
 					<IconCoin className='h-4 w-4 text-yellow-500' />
 					<span className='font-medium'>{Math.floor(gold)}</span>
-					<span className='text-gray-400 text-sm'>(+{goldRate.toFixed(1)}/s)</span>
+					<span className='text-gray-400 text-sm'>
+						({goldRate >= 0 ? '+' : ''}
+						{goldRate.toFixed(1)}/s)
+					</span>
 				</div>
 				<div className='flex items-center gap-2'>
 					<IconUsers className='h-4 w-4 text-blue-500' />
@@ -70,26 +79,39 @@ export function GameStatsBar({
 			</div>
 
 			<div className='flex items-center gap-6'>
-				{/* Player indicators */}
+				{/* Player indicators - clickable to open alliances */}
 				{players && activePlayers !== undefined && (
-					<div className='flex items-center gap-2'>
+					<button
+						type='button'
+						onClick={onOpenAlliances}
+						className='flex items-center gap-2 px-2 py-1 -my-1 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer'
+						title='Manage alliances'
+					>
 						<div className='flex -space-x-1'>
-							{players.map((player) => (
-								<div
-									key={player._id}
-									className='h-5 w-5 rounded-full border-2 border-gray-900'
-									style={{
-										backgroundColor: player.color,
-										opacity: player.eliminatedAt ? 0.3 : 1,
-									}}
-									title={`${player.username}${player.eliminatedAt ? ' (eliminated)' : ''}`}
-								/>
-							))}
+							{players.map((player) => {
+								const isAlly = alliedSet.has(player._id);
+								return (
+									<div
+										key={player._id}
+										className={`h-5 w-5 rounded-full border-2 ${isAlly ? 'border-blue-400' : 'border-gray-900'}`}
+										style={{
+											backgroundColor: player.color,
+											opacity: player.eliminatedAt ? 0.3 : 1,
+										}}
+										title={`${player.username}${isAlly ? ' (ally)' : ''}${player.eliminatedAt ? ' (eliminated)' : ''}`}
+									/>
+								);
+							})}
 						</div>
 						<span className='text-gray-400 text-sm'>
 							{activePlayers}/{players.length}
 						</span>
-					</div>
+						{pendingAllianceCount > 0 && (
+							<span className='bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full'>
+								{pendingAllianceCount}
+							</span>
+						)}
+					</button>
 				)}
 
 				<div className='font-mono text-gray-400'>{formatTime(elapsed)}</div>
@@ -100,6 +122,23 @@ export function GameStatsBar({
 						<IconMenu2 className='h-5 w-5' />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align='end' className='w-48'>
+						{onPauseGame && !isPaused && (
+							<DropdownMenuItem onClick={onPauseGame}>
+								<IconPlayerPause />
+								Pause Game
+							</DropdownMenuItem>
+						)}
+						{onOpenAlliances && (
+							<DropdownMenuItem onClick={onOpenAlliances}>
+								<IconUsersGroup />
+								Alliances
+								{pendingAllianceCount > 0 && (
+									<span className='ml-auto bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full'>
+										{pendingAllianceCount}
+									</span>
+								)}
+							</DropdownMenuItem>
+						)}
 						{onOpenSettings && (
 							<DropdownMenuItem onClick={onOpenSettings}>
 								<IconSettings />

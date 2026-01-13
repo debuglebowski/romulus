@@ -668,7 +668,10 @@ export const setRatios = mutation({
 			.query('armies')
 			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
 			.collect();
-		const currentMilitary = armies.reduce((sum, a) => sum + (a.count ?? 0), 0);
+		const currentMilitary = armies.reduce((sum, a) => {
+			const count = a.count ?? 0;
+			return sum + (Number.isFinite(count) ? count : 0);
+		}, 0);
 
 		// Get player's tiles for capital lookup
 		const tiles = await ctx.db
@@ -696,8 +699,9 @@ export const setRatios = mutation({
 				const existingRallyArmy = armies.find((a) => a.tileId === player.rallyPointTileId && !a.targetTileId);
 
 				if (existingRallyArmy) {
+					const existingCount = Number.isFinite(existingRallyArmy.count) ? existingRallyArmy.count : 0;
 					await ctx.db.patch(existingRallyArmy._id, {
-						count: (existingRallyArmy.count ?? 0) + toConscript,
+						count: existingCount + toConscript,
 					});
 				} else {
 					await ctx.db.insert('armies', {
@@ -713,14 +717,15 @@ export const setRatios = mutation({
 			const capitalArmy = armies.find((a) => a.tileId === capitalTile?._id && !a.targetTileId);
 
 			if (capitalArmy) {
-				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalArmy.count ?? 0);
+				const capitalCount = Number.isFinite(capitalArmy.count) ? capitalArmy.count : 0;
+				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalCount);
 				newPopulation += toDemobilize;
 
-				if (toDemobilize >= (capitalArmy.count ?? 0)) {
+				if (toDemobilize >= capitalCount) {
 					await ctx.db.delete(capitalArmy._id);
 				} else {
 					await ctx.db.patch(capitalArmy._id, {
-						count: (capitalArmy.count ?? 0) - toDemobilize,
+						count: capitalCount - toDemobilize,
 					});
 				}
 			}
@@ -767,7 +772,6 @@ export const getMyEconomy = query({
 		const safeLabourRatio = Number.isFinite(player.labourRatio) ? (player.labourRatio ?? 100) : 100;
 
 		const labourers = Math.floor(safePop * (safeLabourRatio / 100));
-		const goldRate = labourers / 5;
 
 		const tiles = await ctx.db
 			.query('tiles')
@@ -779,12 +783,30 @@ export const getMyEconomy = query({
 		const hasCapital = tiles.some((t) => t.type === 'capital');
 		const popCap = (hasCapital ? 50 : 0) + cityCount * 20;
 
-		// Get total military units
+		// Get total military units from units table (not legacy armies.count)
 		const armies = await ctx.db
 			.query('armies')
 			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
 			.collect();
-		const totalMilitary = armies.reduce((sum, a) => sum + (a.count ?? 0), 0);
+		const armyIdSet = new Set(armies.map((a) => a._id));
+
+		const units = await ctx.db
+			.query('units')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
+		const totalMilitary = units.filter((u) => armyIdSet.has(u.armyId)).length;
+
+		// Get spy count for upkeep
+		const spies = await ctx.db
+			.query('spies')
+			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
+			.collect();
+
+		// Calculate net gold rate (matching tick.ts constants)
+		const UPKEEP_PER_UNIT = 0.1;
+		const UPKEEP_PER_SPY = 0.2;
+		const upkeepCost = totalMilitary * UPKEEP_PER_UNIT + spies.length * UPKEEP_PER_SPY;
+		const goldRate = labourers / 5 - upkeepCost;
 
 		return {
 			gold: safeGold,
@@ -845,3 +867,191 @@ export const lobbyCleanupTick = internalMutation({
 		await ctx.scheduler.runAfter(CLEANUP_INTERVAL, internal.games.lobbyCleanupTick, { gameId });
 	},
 });
+
+// Pause system constants
+const PAUSE_BUDGET_MS = 30 * 1000; // 30 seconds per player per game
+const DISCONNECT_THRESHOLD_MS = 5 * 1000; // 5 seconds of no heartbeat = disconnect
+
+export const pauseGame = mutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const game = await ctx.db.get(gameId);
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (game.status !== 'inProgress') {
+			throw new Error('Game not in progress');
+		}
+		if (game.isPaused) {
+			throw new Error('Game already paused');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) {
+			throw new Error('Not in game');
+		}
+		if (player.eliminatedAt) {
+			throw new Error('Eliminated players cannot pause');
+		}
+
+		// Check if player has pause budget remaining
+		const timeUsed = player.pauseTimeUsed ?? 0;
+		if (timeUsed >= PAUSE_BUDGET_MS) {
+			throw new Error('Pause budget exhausted');
+		}
+
+		await ctx.db.patch(gameId, {
+			isPaused: true,
+			pausedByPlayerId: player._id,
+			pausedAt: Date.now(),
+		});
+	},
+});
+
+export const unpauseGame = mutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const userId = await auth.getUserId(ctx);
+		if (!userId) {
+			throw new Error('Not authenticated');
+		}
+
+		const game = await ctx.db.get(gameId);
+		if (!game) {
+			throw new Error('Game not found');
+		}
+		if (!game.isPaused) {
+			throw new Error('Game not paused');
+		}
+
+		const player = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.eq(q.field('userId'), userId))
+			.first();
+
+		if (!player) {
+			throw new Error('Not in game');
+		}
+
+		// Only the player who paused can unpause
+		if (game.pausedByPlayerId !== player._id) {
+			throw new Error('Only the player who paused can unpause');
+		}
+
+		// Calculate time spent paused and deduct from budget
+		const pauseDuration = Date.now() - (game.pausedAt ?? Date.now());
+		const newTimeUsed = (player.pauseTimeUsed ?? 0) + pauseDuration;
+
+		await ctx.db.patch(player._id, {
+			pauseTimeUsed: newTimeUsed,
+		});
+
+		await ctx.db.patch(gameId, {
+			isPaused: false,
+			pausedByPlayerId: undefined,
+			pausedAt: undefined,
+		});
+	},
+});
+
+export const getPauseState = query({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const game = await ctx.db.get(gameId);
+		if (!game) {
+			return null;
+		}
+
+		if (!game.isPaused || !game.pausedByPlayerId) {
+			return { isPaused: false };
+		}
+
+		const pausingPlayer = await ctx.db.get(game.pausedByPlayerId);
+		if (!pausingPlayer) {
+			return { isPaused: false };
+		}
+
+		const pausingUser = await ctx.db.get(pausingPlayer.userId);
+		const timeUsed = pausingPlayer.pauseTimeUsed ?? 0;
+		const timeRemaining = Math.max(0, PAUSE_BUDGET_MS - timeUsed - (Date.now() - (game.pausedAt ?? Date.now())));
+
+		return {
+			isPaused: true,
+			pausedByPlayerId: game.pausedByPlayerId,
+			pausedByUsername: pausingUser?.username ?? 'Unknown',
+			pausedAt: game.pausedAt,
+			timeRemaining,
+			budgetTotal: PAUSE_BUDGET_MS,
+		};
+	},
+});
+
+// Internal mutation to force unpause (called by tick when budget exhausted)
+export const forceUnpause = internalMutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const game = await ctx.db.get(gameId);
+		if (!game || !game.isPaused) {
+			return;
+		}
+
+		// Deduct remaining time from the pausing player's budget
+		if (game.pausedByPlayerId && game.pausedAt) {
+			const pausingPlayer = await ctx.db.get(game.pausedByPlayerId);
+			if (pausingPlayer) {
+				const pauseDuration = Date.now() - game.pausedAt;
+				const newTimeUsed = (pausingPlayer.pauseTimeUsed ?? 0) + pauseDuration;
+				await ctx.db.patch(game.pausedByPlayerId, {
+					pauseTimeUsed: newTimeUsed,
+				});
+			}
+		}
+
+		await ctx.db.patch(gameId, {
+			isPaused: false,
+			pausedByPlayerId: undefined,
+			pausedAt: undefined,
+		});
+	},
+});
+
+// Internal mutation to auto-pause on disconnect
+export const autoPauseOnDisconnect = internalMutation({
+	args: { gameId: v.id('games'), playerId: v.id('gamePlayers') },
+	handler: async (ctx, { gameId, playerId }) => {
+		const game = await ctx.db.get(gameId);
+		if (!game || game.status !== 'inProgress' || game.isPaused) {
+			return;
+		}
+
+		const player = await ctx.db.get(playerId);
+		if (!player || player.eliminatedAt) {
+			return;
+		}
+
+		// Check if player has pause budget remaining
+		const timeUsed = player.pauseTimeUsed ?? 0;
+		if (timeUsed >= PAUSE_BUDGET_MS) {
+			return; // No budget, can't auto-pause
+		}
+
+		await ctx.db.patch(gameId, {
+			isPaused: true,
+			pausedByPlayerId: playerId,
+			pausedAt: Date.now(),
+		});
+	},
+});
+
+export { DISCONNECT_THRESHOLD_MS, PAUSE_BUDGET_MS };

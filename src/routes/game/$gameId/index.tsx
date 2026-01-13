@@ -1,13 +1,19 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
+import { useSound } from '@/hooks/use-sound';
 import { Button } from '@/ui/_shadcn/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/ui/_shadcn/dialog';
+import { AlliancePanel } from '@/ui/components/alliance-panel';
+import { CapitalIntelPanel } from '@/ui/components/capital-intel-panel';
 import { ContextPanel } from '@/ui/components/context-panel';
 import { GameStatsBar } from '@/ui/components/game-stats-bar';
 import { HexMap3D } from '@/ui/components/hex-map-3d';
+import { PauseOverlay } from '@/ui/components/pause-overlay';
 import { RatioSliders } from '@/ui/components/ratio-sliders';
+import { UpgradesModal } from '@/ui/components/upgrades-modal';
 
 import { api } from '../../../../convex/_generated/api';
 import { computeHorizon, coordKey, findPath } from '../../../../convex/lib/hex';
@@ -55,6 +61,23 @@ function GamePage() {
 	const abandonMutation = useMutation(api.games.abandon);
 	const moveSpyMutation = useMutation(api.spies.moveSpy);
 	const cancelSpyMoveMutation = useMutation(api.spies.cancelMove);
+	const pauseGameMutation = useMutation(api.games.pauseGame);
+	const unpauseGameMutation = useMutation(api.games.unpauseGame);
+	const pauseState = useQuery(api.games.getPauseState, { gameId: gameId as Id<'games'> });
+
+	// Alliance queries
+	const allianceData = useQuery(api.alliances.getAlliances, { gameId: gameId as Id<'games'> });
+	const alliedPlayerIds = useQuery(api.alliances.getAlliedPlayerIds, { gameId: gameId as Id<'games'> });
+
+	// Sound effects
+	const { playSound, showToastAlerts } = useSound();
+
+	// Game events notification tracking
+	const [lastEventCheckTime, setLastEventCheckTime] = useState(() => Date.now());
+	const recentEvents = useQuery(api.gameEvents.listRecent, {
+		gameId: gameId as Id<'games'>,
+		since: lastEventCheckTime - 30000, // Look back 30 seconds
+	});
 
 	// Selection state
 	const [selectedTileId, setSelectedTileId] = useState<string | null>(null);
@@ -63,6 +86,8 @@ function GamePage() {
 	const [mode, setMode] = useState<SelectionMode>('default');
 	const [moveUnitCount, setMoveUnitCount] = useState<number>(0);
 	const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+	const [showUpgrades, setShowUpgrades] = useState(false);
+	const [showAlliances, setShowAlliances] = useState(false);
 
 	// Elimination modal state
 	const [showEliminatedModal, setShowEliminatedModal] = useState(false);
@@ -125,6 +150,100 @@ function GamePage() {
 		prevEliminatedRef.current = myPlayer?.eliminatedAt;
 	}, [myPlayer?.eliminatedAt]);
 
+	// Show toast notifications for game events (city flips, etc.)
+	const processedEventIds = useRef(new Set<string>());
+	useEffect(() => {
+		if (!recentEvents || !user || !myPlayer) {
+			return;
+		}
+
+		for (const event of recentEvents) {
+			// Skip already processed events
+			if (processedEventIds.current.has(event._id)) {
+				continue;
+			}
+			processedEventIds.current.add(event._id);
+
+			// Skip events older than our check time (initial load)
+			if (event._creationTime < lastEventCheckTime) {
+				continue;
+			}
+
+			// Handle city flip events
+			if (event.type === 'cityFlipped') {
+				const data = event.data as { tileType?: string; q?: number; r?: number } | undefined;
+				const isCapital = data?.tileType === 'capital';
+				const isMyCityFlipped = event.targetPlayerId === user._id;
+				const didIFlipCity = event.actorPlayerId === user._id;
+
+				if (isMyCityFlipped) {
+					// My city was flipped by enemy spy
+					playSound('capture');
+					if (showToastAlerts) {
+						toast.error(
+							isCapital ? `Your capital was turned by ${event.actorUsername}!` : `Your city was turned by ${event.actorUsername}'s spies!`,
+						);
+					}
+				} else if (didIFlipCity) {
+					// I flipped an enemy city
+					playSound('capture');
+					if (showToastAlerts) {
+						toast.success(isCapital ? `You turned ${event.targetUsername}'s capital!` : `Your spies turned ${event.targetUsername}'s city!`);
+					}
+				}
+			}
+
+			// Handle city under attack events
+			if (event.type === 'cityUnderAttack') {
+				const data = event.data as { tileType?: string; q?: number; r?: number } | undefined;
+				const isCapital = data?.tileType === 'capital';
+				const isMyCityAttacked = event.targetPlayerId === user._id;
+
+				if (isMyCityAttacked) {
+					playSound('cityUnderAttack');
+					if (showToastAlerts) {
+						toast.error(
+							isCapital
+								? `Your capital is under attack by ${event.actorUsername}!`
+								: `Your city is under attack by ${event.actorUsername}!`,
+						);
+					}
+				}
+			}
+
+			// Handle spy detected events
+			if (event.type === 'spyDetected') {
+				const isMySpyDetected = event.targetPlayerId === user._id;
+
+				if (isMySpyDetected) {
+					playSound('spyDetected');
+					if (showToastAlerts) {
+						toast.warning('One of your spies has been detected!');
+					}
+				}
+			}
+
+			// Handle border contact events
+			if (event.type === 'borderContact') {
+				const isMyBorder = event.targetPlayerId === user._id;
+
+				if (isMyBorder) {
+					playSound('borderContact');
+					if (showToastAlerts) {
+						toast.warning(`${event.actorUsername} captured a tile at your border!`);
+					}
+				}
+			}
+		}
+
+		// Update check time periodically to avoid re-processing old events
+		const timer = setTimeout(() => {
+			setLastEventCheckTime(Date.now());
+		}, 5000);
+
+		return () => clearTimeout(timer);
+	}, [recentEvents, user, myPlayer, lastEventCheckTime, playSound, showToastAlerts]);
+
 	// Transform visibility data to TileData format
 	const tilesWithVisibility = useMemo((): TileData[] => {
 		if (!visibilityData) {
@@ -138,8 +257,12 @@ function GamePage() {
 		const ownedTiles = visibilityData.visible.filter((t) => t.ownerId === visibilityData.playerId).map((t) => ({ q: t.q, r: t.r }));
 		const capitalTile = visibilityData.visible.find((t) => t.type === 'capital');
 
+		// Include ally visible tiles in horizon calculation
+		const allyTiles = (visibilityData.allyVisible ?? []).map((t) => ({ q: t.q, r: t.r }));
+		const allKnownTiles = [...ownedTiles, ...allyTiles];
+
 		// Compute horizon: 5 from capital + owned tiles + neighbors + 1
-		const horizon = capitalTile ? computeHorizon({ q: capitalTile.q, r: capitalTile.r }, ownedTiles) : new Set<string>();
+		const horizon = capitalTile ? computeHorizon({ q: capitalTile.q, r: capitalTile.r }, allKnownTiles) : new Set<string>();
 
 		// Add visible tiles (always shown)
 		for (const tile of visibilityData.visible) {
@@ -155,11 +278,31 @@ function GamePage() {
 			});
 		}
 
+		// Add ally-shared visible tiles (visible through ally vision sharing)
+		for (const tile of visibilityData.allyVisible ?? []) {
+			const key = coordKey(tile.q, tile.r);
+			if (tileCoords.has(key)) {
+				continue; // Already have this tile from our own vision
+			}
+			tileCoords.add(key);
+			result.push({
+				_id: tile._id,
+				q: tile.q,
+				r: tile.r,
+				ownerId: tile.ownerId ?? undefined,
+				type: tile.type,
+				visibility: 'visible', // Ally vision shows as visible (real-time)
+			});
+		}
+
 		// Add fogged tiles (only within horizon)
 		for (const tile of visibilityData.fogged) {
 			const key = coordKey(tile.q, tile.r);
 			if (!horizon.has(key)) {
 				continue;
+			}
+			if (tileCoords.has(key)) {
+				continue; // Already visible through ally vision
 			}
 			tileCoords.add(key);
 			result.push({
@@ -177,6 +320,9 @@ function GamePage() {
 			const key = coordKey(tile.q, tile.r);
 			if (!horizon.has(key)) {
 				continue;
+			}
+			if (tileCoords.has(key)) {
+				continue; // Already visible through ally vision
 			}
 			tileCoords.add(key);
 			result.push({
@@ -278,11 +424,21 @@ function GamePage() {
 	// Get spy intel for selected tile (if player has spy there)
 	const spyIntelQuery = useQuery(
 		api.spies.getIntelForTile,
-		selectedTile && !isOwnTile && spiesOnTile.length > 0
+		selectedTile && !isOwnTile && spiesOnTile.length > 0 ? { gameId: gameId as Id<'games'>, tileId: selectedTile._id as Id<'tiles'> } : 'skip',
+	);
+	const spyIntel = spyIntelQuery ?? null;
+
+	// Get allegiance data for selected tile (if player has spy there and it's a city/capital)
+	const allegianceQuery = useQuery(
+		api.spies.getAllegianceForTile,
+		selectedTile && spiesOnTile.length > 0 && (selectedTile.type === 'city' || selectedTile.type === 'capital')
 			? { gameId: gameId as Id<'games'>, tileId: selectedTile._id as Id<'tiles'> }
 			: 'skip',
 	);
-	const spyIntel = spyIntelQuery ?? null;
+	const allegianceData = allegianceQuery ?? null;
+
+	// Build set of allied player IDs for pathfinding (as strings for comparison with tile.ownerId)
+	const alliedSet = useMemo(() => new Set<string>(alliedPlayerIds ?? []), [alliedPlayerIds]);
 
 	// Compute movement path preview (for army or spy)
 	const movementPath = useMemo(() => {
@@ -317,7 +473,8 @@ function GamePage() {
 				if (coord.q === targetTile.q && coord.r === targetTile.r) {
 					return true;
 				}
-				return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
+				// Allow traversal through own, neutral, or allied territory
+				return tile.ownerId === undefined || tile.ownerId === myPlayer?._id || (tile.ownerId !== undefined && alliedSet.has(tile.ownerId));
 			};
 
 			const path = findPath({ q: army.currentQ, r: army.currentR }, { q: targetTile.q, r: targetTile.r }, canTraverse);
@@ -341,7 +498,7 @@ function GamePage() {
 		}
 
 		return undefined;
-	}, [mode, selectedArmyId, selectedSpyId, selectedTileId, armies, spies, tilesWithVisibility, myPlayer?._id]);
+	}, [mode, selectedArmyId, selectedSpyId, selectedTileId, armies, spies, tilesWithVisibility, myPlayer?._id, alliedSet]);
 
 	// Tile click handler
 	const handleTileClick = useCallback(
@@ -364,7 +521,12 @@ function GamePage() {
 						if (coord.q === q && coord.r === r) {
 							return true;
 						}
-						return tile.ownerId === undefined || tile.ownerId === myPlayer?._id;
+						// Allow traversal through own, neutral, or allied territory
+						return (
+							tile.ownerId === undefined ||
+							tile.ownerId === myPlayer?._id ||
+							(tile.ownerId !== undefined && alliedSet.has(tile.ownerId))
+						);
 					};
 					const path = findPath({ q: army.currentQ, r: army.currentR }, { q, r }, canTraverse);
 
@@ -418,7 +580,19 @@ function GamePage() {
 				setSelectedSpyId(null);
 			}
 		},
-		[mode, selectedArmyId, selectedSpyId, armies, spies, tilesWithVisibility, myPlayer?._id, moveArmyMutation, moveSpyMutation, moveUnitCount],
+		[
+			mode,
+			selectedArmyId,
+			selectedSpyId,
+			armies,
+			spies,
+			tilesWithVisibility,
+			myPlayer?._id,
+			moveArmyMutation,
+			moveSpyMutation,
+			moveUnitCount,
+			alliedSet,
+		],
 	);
 
 	// Army click handler
@@ -546,10 +720,11 @@ function GamePage() {
 		}
 		try {
 			await buildCityMutation({ tileId: selectedTileId as Id<'tiles'> });
+			playSound('buildCity');
 		} catch (e) {
 			console.error('Failed to build city:', e);
 		}
-	}, [selectedTileId, buildCityMutation]);
+	}, [selectedTileId, buildCityMutation, playSound]);
 
 	// Retreat handler
 	const handleRetreat = useCallback(
@@ -652,6 +827,38 @@ function GamePage() {
 		navigate({ search: { settings: 'open' } });
 	}, [navigate]);
 
+	const handleOpenAlliances = useCallback(() => {
+		setShowAlliances(true);
+	}, []);
+
+	// Pause handlers
+	const handlePauseGame = useCallback(async () => {
+		try {
+			await pauseGameMutation({ gameId: gameId as Id<'games'> });
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to pause game');
+		}
+	}, [gameId, pauseGameMutation]);
+
+	const handleUnpauseGame = useCallback(async () => {
+		try {
+			await unpauseGameMutation({ gameId: gameId as Id<'games'> });
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Failed to unpause game');
+		}
+	}, [gameId, unpauseGameMutation]);
+
+	// Update time every second for pause countdown
+	useEffect(() => {
+		if (!pauseState?.isPaused) {
+			return;
+		}
+		const interval = setInterval(() => {
+			setNow(Date.now());
+		}, 1000);
+		return () => clearInterval(interval);
+	}, [pauseState?.isPaused]);
+
 	// Redirect guards
 	useEffect(() => {
 		if (game?.status === 'waiting') {
@@ -708,8 +915,13 @@ function GamePage() {
 					startedAt={economy.startedAt}
 					players={game.players}
 					activePlayers={activePlayers.length}
+					alliedPlayerIds={alliedPlayerIds ?? []}
+					pendingAllianceCount={(allianceData?.pendingReceived.length ?? 0) + (allianceData?.pendingSent.length ?? 0)}
+					isPaused={pauseState?.isPaused ?? false}
 					onLeaveGame={handleOpenLeaveDialog}
 					onOpenSettings={handleOpenSettings}
+					onOpenAlliances={handleOpenAlliances}
+					onPauseGame={!isEliminated ? handlePauseGame : undefined}
 				/>
 			)}
 
@@ -750,6 +962,17 @@ function GamePage() {
 					</div>
 				)}
 
+				{/* Pause overlay */}
+				{pauseState?.isPaused && pauseState.pausedByUsername && (
+					<PauseOverlay
+						pausedByUsername={pauseState.pausedByUsername}
+						timeRemaining={pauseState.timeRemaining ?? 0}
+						budgetTotal={pauseState.budgetTotal ?? 30000}
+						isOwnPause={pauseState.pausedByPlayerId === myPlayer?._id}
+						onUnpause={handleUnpauseGame}
+					/>
+				)}
+
 				{/* Capital moving (frozen) overlay */}
 				{economy?.capitalMovingToTileId && economy.capitalMoveDepartureTime && economy.capitalMoveArrivalTime && (
 					<div className='absolute inset-0 bg-black/50 flex items-center justify-center z-10'>
@@ -764,10 +987,7 @@ function GamePage() {
 									<>
 										<p className='text-2xl font-medium text-amber-400 mb-4'>{formatTime(timeRemaining)}</p>
 										<div className='w-full h-2 bg-zinc-700 rounded overflow-hidden mb-4'>
-											<div
-												className='h-full bg-purple-500 transition-all'
-												style={{ width: `${progress}%` }}
-											/>
+											<div className='h-full bg-purple-500 transition-all' style={{ width: `${progress}%` }} />
 										</div>
 									</>
 								);
@@ -779,9 +999,46 @@ function GamePage() {
 					</div>
 				)}
 
+				{/* Upgrades modal */}
+				{!isEliminated && (
+					<UpgradesModal
+						gameId={gameId}
+						playerGold={economy?.gold ?? 0}
+						totalPopulation={economy?.totalUnits ?? economy?.population ?? 0}
+						isCapitalMoving={!!economy?.capitalMovingToTileId}
+						open={showUpgrades}
+						onOpenChange={setShowUpgrades}
+						players={game.players}
+					/>
+				)}
+
+				{/* Alliance panel */}
+				{!isEliminated && (
+					<AlliancePanel
+						gameId={gameId}
+						isCapitalMoving={!!economy?.capitalMovingToTileId}
+						open={showAlliances}
+						onOpenChange={setShowAlliances}
+						players={game.players}
+					/>
+				)}
+
 				{/* Right panel overlay */}
 				<div className='absolute bottom-4 right-4 flex w-64 flex-col gap-4'>
-					{/* Ratio sliders on top */}
+					{/* Capital Intel panel */}
+					{!isEliminated && <CapitalIntelPanel gameId={gameId} />}
+
+					{/* Upgrades toggle button */}
+					{!isEliminated && (
+						<button
+							onClick={() => setShowUpgrades(true)}
+							className='rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs font-medium text-zinc-300 hover:bg-zinc-800 hover:text-white transition-colors'
+						>
+							Upgrades
+						</button>
+					)}
+
+					{/* Ratio sliders */}
 					{!isEliminated && (
 						<RatioSliders
 							labourRatio={displayRatios.labour}
@@ -800,6 +1057,7 @@ function GamePage() {
 						stationaryArmiesOnTile={stationaryArmiesOnTile}
 						spiesOnTile={spiesOnTile}
 						spyIntel={spyIntel}
+						allegianceData={allegianceData}
 						isOwnTile={isOwnTile}
 						mode={mode}
 						moveUnitCount={moveUnitCount}

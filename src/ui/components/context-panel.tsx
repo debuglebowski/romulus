@@ -26,6 +26,20 @@ interface SpyIntel {
 	tileOwnerId?: string;
 }
 
+interface AllegianceBreakdown {
+	teamId: string;
+	score: number;
+	color: string;
+	isOwner: boolean;
+	isMe: boolean;
+}
+
+interface AllegianceData {
+	tileOwnerId?: string;
+	tileType: 'city' | 'capital';
+	breakdown: AllegianceBreakdown[];
+}
+
 interface ContextPanelProps {
 	selectedTile?: TileData;
 	selectedArmy?: ArmyData;
@@ -33,6 +47,7 @@ interface ContextPanelProps {
 	stationaryArmiesOnTile?: ArmyData[];
 	spiesOnTile?: { _id: string; isRevealed: boolean }[];
 	spyIntel?: SpyIntel | null;
+	allegianceData?: AllegianceData | null;
 	isOwnTile: boolean;
 	mode: 'default' | 'move' | 'rally' | 'spy-move';
 	moveUnitCount?: number;
@@ -59,6 +74,7 @@ export function ContextPanel({
 	stationaryArmiesOnTile = [],
 	spiesOnTile = [],
 	spyIntel,
+	allegianceData,
 	isOwnTile,
 	mode,
 	moveUnitCount,
@@ -227,6 +243,43 @@ export function ContextPanel({
 							<span className='text-white font-medium'>{spyIntel.unitCount}</span>
 						</div>
 					</div>
+				</div>
+			)}
+
+			{/* Allegiance section - shows city loyalty breakdown when spy is present */}
+			{selectedTile && allegianceData && (selectedTile.type === 'city' || selectedTile.type === 'capital') && mode === 'default' && (
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs text-amber-400'>
+						<IconCrown size={14} />
+						<span>Allegiance</span>
+					</div>
+					<div className='space-y-1'>
+						{allegianceData.breakdown.map((entry) => (
+							<div key={entry.teamId} className='flex items-center gap-2'>
+								<div
+									className='w-2 h-2 rounded-full shrink-0'
+									style={{ backgroundColor: entry.color }}
+								/>
+								<div className='flex-1 h-1.5 bg-zinc-700 rounded overflow-hidden'>
+									<div
+										className='h-full transition-all'
+										style={{
+											width: `${entry.score}%`,
+											backgroundColor: entry.isOwner ? '#22c55e' : entry.isMe ? '#a855f7' : entry.color,
+										}}
+									/>
+								</div>
+								<span className={`text-[10px] w-8 text-right ${entry.isMe ? 'text-purple-400 font-medium' : 'text-zinc-400'}`}>
+									{Math.round(entry.score)}%
+								</span>
+							</div>
+						))}
+					</div>
+					{/* Show flip warning if owner allegiance is low */}
+					{allegianceData.breakdown.find((b) => b.isOwner)?.score !== undefined && 
+					 allegianceData.breakdown.find((b) => b.isOwner)!.score < 30 && (
+						<p className='text-[10px] text-amber-400'>City loyalty wavering!</p>
+					)}
 				</div>
 			)}
 

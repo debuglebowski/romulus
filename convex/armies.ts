@@ -1,8 +1,10 @@
 import { v } from 'convex/values';
 
 import { mutation, query } from './_generated/server';
+import { getAlliedPlayerIdsInternal } from './alliances';
 import { auth } from './auth';
 import { computeLineOfSight, coordKey, findPath, getNeighbors } from './lib/hex';
+import { getUpgradeModifiers } from './upgrades';
 
 import type { Id } from './_generated/dataModel';
 
@@ -157,7 +159,10 @@ export const moveArmy = mutation({
 
 		const tileMap = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
 
-		// Can only traverse owned or neutral tiles (not enemy tiles except destination)
+		// Get allied player IDs for pathfinding through allied territory
+		const alliedPlayerIds = await getAlliedPlayerIdsInternal(ctx, army.ownerId);
+
+		// Can only traverse owned, neutral, or allied tiles (not enemy tiles except destination)
 		// Non-existent tiles (outside playable map) are blocked by the !tile check
 		const canTraverse = (coord: { q: number; r: number }) => {
 			const tile = tileMap.get(coordKey(coord.q, coord.r));
@@ -169,7 +174,8 @@ export const moveArmy = mutation({
 			if (coord.q === targetTile.q && coord.r === targetTile.r) {
 				return true;
 			}
-			return tile.ownerId === undefined || tile.ownerId === army.ownerId;
+			// Allow traversal through own, neutral, or allied territory
+			return tile.ownerId === undefined || tile.ownerId === army.ownerId || alliedPlayerIds.has(tile.ownerId);
 		};
 
 		const path = findPath({ q: currentTile.q, r: currentTile.r }, { q: targetTile.q, r: targetTile.r }, canTraverse);
@@ -178,8 +184,18 @@ export const moveArmy = mutation({
 			throw new Error('No valid path to target');
 		}
 
+		// Fetch player's upgrades to apply army speed bonus
+		const playerUpgrades = await ctx.db
+			.query('playerUpgrades')
+			.withIndex('by_playerId', (q) => q.eq('playerId', army.ownerId))
+			.collect();
+
+		const modifiers = getUpgradeModifiers(playerUpgrades.map((u) => u.upgradeId));
+		const speedMultiplier = 1 - (modifiers.armySpeedBonus ?? 0); // Bonus reduces travel time
+
 		const now = Date.now();
-		const travelTime = path.length * TRAVEL_TIME_PER_HEX;
+		const baseTravelTime = path.length * TRAVEL_TIME_PER_HEX;
+		const travelTime = Math.round(baseTravelTime * speedMultiplier);
 
 		if (unitsToMove < totalUnits) {
 			// Split the army: create new moving army and transfer some units

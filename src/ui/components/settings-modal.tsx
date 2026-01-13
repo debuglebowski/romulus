@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Button } from '@/ui/_shadcn/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/ui/_shadcn/dialog';
 import { Label } from '@/ui/_shadcn/label';
+import { Slider } from '@/ui/_shadcn/slider';
 import { Switch } from '@/ui/_shadcn/switch';
 
 import { api } from '../../../convex/_generated/api';
@@ -19,13 +20,20 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 	const [isSaving, setIsSaving] = useState(false);
 	const [saved, setSaved] = useState(false);
 
+	// Volume settings
+	const [soundVolume, setSoundVolume] = useState<number | null>(null);
+	const [musicVolume, setMusicVolume] = useState<number | null>(null);
+
+	// Notification settings
 	const [showToasts, setShowToasts] = useState<boolean | null>(null);
 	const [soundOnAttack, setSoundOnAttack] = useState<boolean | null>(null);
 
+	const currentSoundVolume = soundVolume ?? user?.settingSoundVolume ?? 100;
+	const currentMusicVolume = musicVolume ?? user?.settingMusicVolume ?? 50;
 	const currentShowToasts = showToasts ?? user?.settingShowToastAlerts ?? true;
 	const currentSoundOnAttack = soundOnAttack ?? user?.settingPlaySoundOnAttack ?? true;
 
-	const hasChanges = showToasts !== null || soundOnAttack !== null;
+	const hasChanges = showToasts !== null || soundOnAttack !== null || soundVolume !== null || musicVolume !== null;
 
 	const handleSave = useCallback(async () => {
 		setIsSaving(true);
@@ -35,17 +43,21 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 			await updateSettings({
 				...(showToasts !== null && { settingShowToastAlerts: showToasts }),
 				...(soundOnAttack !== null && { settingPlaySoundOnAttack: soundOnAttack }),
+				...(soundVolume !== null && { settingSoundVolume: soundVolume }),
+				...(musicVolume !== null && { settingMusicVolume: musicVolume }),
 			});
 
 			setShowToasts(null);
 			setSoundOnAttack(null);
+			setSoundVolume(null);
+			setMusicVolume(null);
 			setSaved(true);
 
 			setTimeout(() => setSaved(false), 2000);
 		} finally {
 			setIsSaving(false);
 		}
-	}, [updateSettings, showToasts, soundOnAttack]);
+	}, [updateSettings, showToasts, soundOnAttack, soundVolume, musicVolume]);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,6 +72,40 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 					</div>
 				) : (
 					<div className="space-y-6">
+						{/* Audio settings */}
+						<div className="space-y-4">
+							<div>
+								<h2 className="uppercase tracking-wider text-sm">Audio</h2>
+								<div className="mt-1 border-b" />
+							</div>
+
+							<div className="space-y-2">
+								<div className="flex items-center justify-between">
+									<Label>Sound Effects</Label>
+									<span className="text-sm text-muted-foreground w-12 text-right">{currentSoundVolume}%</span>
+								</div>
+								<Slider
+									value={[currentSoundVolume]}
+									onValueChange={([value]) => setSoundVolume(value)}
+									max={100}
+									step={5}
+								/>
+							</div>
+
+							<div className="space-y-2">
+								<div className="flex items-center justify-between">
+									<Label>Music</Label>
+									<span className="text-sm text-muted-foreground w-12 text-right">{currentMusicVolume}%</span>
+								</div>
+								<Slider
+									value={[currentMusicVolume]}
+									onValueChange={([value]) => setMusicVolume(value)}
+									max={100}
+									step={5}
+								/>
+							</div>
+						</div>
+
 						{/* Notification settings */}
 						<div className="space-y-4">
 							<div>
@@ -68,12 +114,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 							</div>
 
 							<div className="flex items-center justify-between">
-								<Label>Game Invites</Label>
+								<Label>Toast Alerts</Label>
 								<Switch checked={currentShowToasts} onCheckedChange={setShowToasts} />
 							</div>
 
 							<div className="flex items-center justify-between">
-								<Label>Turn Alerts</Label>
+								<Label>Sound on Attack</Label>
 								<Switch checked={currentSoundOnAttack} onCheckedChange={setSoundOnAttack} />
 							</div>
 						</div>

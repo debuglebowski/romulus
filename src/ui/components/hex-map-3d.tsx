@@ -428,6 +428,7 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 			<Html
 				position={[0, 0, 0.01]}
 				center
+				zIndexRange={[50, 0]}
 				style={{
 					pointerEvents: 'none',
 					userSelect: 'none',
@@ -451,6 +452,7 @@ function BillboardArmy({ army, color, isSelected, tiles, now, onClick }: Billboa
 				<Html
 					position={[0, -0.12, 0]}
 					center
+					zIndexRange={[50, 0]}
 					style={{
 						pointerEvents: 'none',
 						userSelect: 'none',
@@ -576,6 +578,7 @@ function BillboardSpy({ spy, tiles, now, isSelected, count, onClick }: Billboard
 			<Html
 				position={[0, 0, 0.01]}
 				center
+				zIndexRange={[50, 0]}
 				style={{
 					pointerEvents: 'none',
 					userSelect: 'none',
@@ -599,6 +602,7 @@ function BillboardSpy({ spy, tiles, now, isSelected, count, onClick }: Billboard
 				<Html
 					position={[0, 0.12, 0]}
 					center
+					zIndexRange={[50, 0]}
 					style={{
 						pointerEvents: 'none',
 						userSelect: 'none',

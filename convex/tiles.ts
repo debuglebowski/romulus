@@ -4,8 +4,37 @@ import { internalMutation, mutation, query } from './_generated/server';
 import { auth } from './auth';
 import { computeLineOfSight, coordKey, findPath, getNeighbors, getStartingPositions, hexesInRadius } from './lib/hex';
 
+import type { Id } from './_generated/dataModel';
+import type { MutationCtx } from './_generated/server';
+
 const CITY_BUILD_COST = 50;
 const CAPITAL_TRAVEL_TIME_PER_HEX = 30000; // 30 seconds per hex
+
+// Initialize allegiance scores for a city tile
+// Owner starts at 100, all other players at 0
+export async function initializeCityAllegiance(
+	ctx: MutationCtx,
+	gameId: Id<'games'>,
+	tileId: Id<'tiles'>,
+	ownerId: Id<'gamePlayers'> | undefined,
+) {
+	// Get all players in the game
+	const allPlayers = await ctx.db
+		.query('gamePlayers')
+		.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+		.collect();
+
+	// Create allegiance records for each player
+	for (const player of allPlayers) {
+		const score = player._id === ownerId ? 100 : 0;
+		await ctx.db.insert('cityAllegiance', {
+			gameId,
+			tileId,
+			teamId: player._id,
+			score,
+		});
+	}
+}
 
 export const generateMap = internalMutation({
 	args: {
@@ -63,15 +92,22 @@ export const generateMap = internalMutation({
 		const shuffled = [...unownedHexes].sort(() => Math.random() - 0.5);
 		const npcPositions = shuffled.slice(0, Math.min(npcCityCount, shuffled.length));
 
+		const npcCityTileIds: Id<'tiles'>[] = [];
 		for (const pos of npcPositions) {
-			await ctx.db.insert('tiles', {
+			const tileId = await ctx.db.insert('tiles', {
 				gameId,
 				q: pos.q,
 				r: pos.r,
 				ownerId: undefined,
 				type: 'city',
 			});
+			npcCityTileIds.push(tileId);
 			ownedHexes.add(coordKey(pos.q, pos.r));
+		}
+
+		// Initialize allegiance for NPC cities (no owner, all players start at 0)
+		for (const tileId of npcCityTileIds) {
+			await initializeCityAllegiance(ctx, gameId, tileId, undefined);
 		}
 
 		// Fill remaining hexes as empty unowned tiles
@@ -180,6 +216,9 @@ export const buildCity = mutation({
 		await ctx.db.patch(tileId, {
 			type: 'city',
 		});
+
+		// Initialize allegiance scores for the new city
+		await initializeCityAllegiance(ctx, tile.gameId, tileId, player._id);
 	},
 });
 
@@ -209,12 +248,71 @@ export const getVisibleForPlayer = query({
 		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);
 		const losCoords = computeLineOfSight(ownedTiles);
 
+		// Get ally shared vision
+		// First, get all active alliances where this player is involved
+		const alliances1 = await ctx.db
+			.query('alliances')
+			.withIndex('by_player1Id', (q) => q.eq('player1Id', player._id))
+			.filter((q) => q.eq(q.field('status'), 'active'))
+			.collect();
+
+		const alliances2 = await ctx.db
+			.query('alliances')
+			.withIndex('by_player2Id', (q) => q.eq('player2Id', player._id))
+			.filter((q) => q.eq(q.field('status'), 'active'))
+			.collect();
+
+		const allAlliances = [...alliances1, ...alliances2];
+
+		// Collect ally vision coords
+		const allyVisionCoords = new Set<string>();
+		const allyVisionInfo = new Map<string, { allyId: string; allyColor: string }>();
+
+		for (const alliance of allAlliances) {
+			const allyId = alliance.player1Id === player._id ? alliance.player2Id : alliance.player1Id;
+
+			// Check if ally shares vision with us
+			const allySharing = await ctx.db
+				.query('allianceSharing')
+				.withIndex('by_allianceId', (q) => q.eq('allianceId', alliance._id))
+				.filter((q) => q.and(q.eq(q.field('playerId'), allyId), q.eq(q.field('sharingType'), 'vision')))
+				.first();
+
+			if (!allySharing?.enabled) {
+				continue;
+			}
+
+			// Get ally player info
+			const allyPlayer = await ctx.db.get(allyId);
+			if (!allyPlayer || allyPlayer.eliminatedAt) {
+				continue;
+			}
+
+			// Get ally's owned tiles and compute their LOS
+			const allyOwnedTiles = allTiles.filter((t) => t.ownerId === allyId);
+			const allyLos = computeLineOfSight(allyOwnedTiles);
+
+			// Add ally vision to our set (excluding tiles we already see)
+			for (const key of allyLos) {
+				if (!losCoords.has(key)) {
+					allyVisionCoords.add(key);
+					allyVisionInfo.set(key, { allyId, allyColor: allyPlayer.color });
+				}
+			}
+		}
+
 		const visible = [];
 		const notVisibleTiles = [];
+		const allyVisible: Array<typeof allTiles[0] & { allyId: string; allyColor: string }> = [];
 
 		for (const tile of allTiles) {
-			if (losCoords.has(coordKey(tile.q, tile.r))) {
+			const key = coordKey(tile.q, tile.r);
+			if (losCoords.has(key)) {
 				visible.push(tile);
+			} else if (allyVisionCoords.has(key)) {
+				// Tile visible through ally vision sharing
+				const info = allyVisionInfo.get(key)!;
+				allyVisible.push({ ...tile, allyId: info.allyId, allyColor: info.allyColor });
 			} else {
 				notVisibleTiles.push(tile);
 			}
@@ -248,7 +346,7 @@ export const getVisibleForPlayer = query({
 			.filter((tile) => !memoryMap.has(coordKey(tile.q, tile.r)))
 			.map((tile) => ({ q: tile.q, r: tile.r, type: tile.type }));
 
-		return { visible, fogged, unexplored, playerId: player._id };
+		return { visible, fogged, unexplored, allyVisible, playerId: player._id };
 	},
 });
 
