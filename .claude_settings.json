@@ -1,0 +1,39 @@
+{
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true
+  },
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Read(./**)",
+      "Write(./**)",
+      "Edit(./**)",
+      "Glob(./**)",
+      "Grep(./**)",
+      "Read(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/**)",
+      "Write(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/**)",
+      "Edit(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/**)",
+      "Glob(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/**)",
+      "Grep(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/**)",
+      "Read(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/.auto-claude/specs/002-project-configuration-cleanup/**)",
+      "Write(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/.auto-claude/specs/002-project-configuration-cleanup/**)",
+      "Edit(/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/002-project-configuration-cleanup/.auto-claude/specs/002-project-configuration-cleanup/**)",
+      "Read(/Users/Kalle/dev/projects/romulus/.auto-claude/**)",
+      "Write(/Users/Kalle/dev/projects/romulus/.auto-claude/**)",
+      "Edit(/Users/Kalle/dev/projects/romulus/.auto-claude/**)",
+      "Glob(/Users/Kalle/dev/projects/romulus/.auto-claude/**)",
+      "Grep(/Users/Kalle/dev/projects/romulus/.auto-claude/**)",
+      "Bash(*)",
+      "WebFetch(*)",
+      "WebSearch(*)",
+      "mcp__context7__resolve-library-id(*)",
+      "mcp__context7__get-library-docs(*)",
+      "mcp__graphiti-memory__search_nodes(*)",
+      "mcp__graphiti-memory__search_facts(*)",
+      "mcp__graphiti-memory__add_episode(*)",
+      "mcp__graphiti-memory__get_episodes(*)",
+      "mcp__graphiti-memory__get_entity_edge(*)"
+    ]
+  }
+}
