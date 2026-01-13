@@ -28,3 +28,6 @@ convex/_generated
 
 # TanStack Router
 src/routeTree.gen.ts
+
+# Auto Claude data directory
+.auto-claude/
