@@ -44,7 +44,9 @@ export const generateMap = internalMutation({
 	},
 	handler: async (ctx, { gameId, playerIds }) => {
 		const playerCount = playerIds.length;
-		const radius = 20 + playerCount;
+		const game = await ctx.db.get(gameId);
+		const baseRadius = game?.mapSize === 'small' ? 12 : 20;
+		const radius = baseRadius + playerCount;
 
 		// Generate all hexes
 		const allHexes = hexesInRadius(radius);

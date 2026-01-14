@@ -39,6 +39,7 @@ const schema = defineSchema({
 		name: v.string(),
 		hostId: v.id('users'),
 		maxPlayers: v.number(),
+		mapSize: v.optional(v.union(v.literal('small'), v.literal('standard'))),
 		status: v.union(
 			v.literal('waiting'),
 			v.literal('starting'),

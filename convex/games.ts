@@ -253,6 +253,7 @@ export const create = mutation({
 	args: {
 		name: v.string(),
 		maxPlayers: v.number(),
+		mapSize: v.optional(v.union(v.literal('small'), v.literal('standard'))),
 	},
 	handler: async (ctx, args) => {
 		const userId = await auth.getUserId(ctx);
@@ -274,10 +275,13 @@ export const create = mutation({
 			throw new Error('Player count must be 2-8');
 		}
 
+		const mapSize = args.mapSize ?? 'standard';
+
 		const gameId = await ctx.db.insert('games', {
 			name: trimmedName,
 			hostId: userId,
 			maxPlayers: args.maxPlayers,
+			mapSize,
 			status: 'waiting',
 		});
 

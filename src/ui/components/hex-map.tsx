@@ -104,7 +104,6 @@ export function HexMap({
 	rallyPointTileId,
 	movementPath,
 	onTileClick,
-	onArmyClick,
 	onBackgroundClick,
 }: HexMapProps) {
 	const combatTileSet = useMemo(() => new Set(combatTileIds), [combatTileIds]);

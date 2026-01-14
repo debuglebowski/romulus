@@ -5,13 +5,7 @@ import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useState } from 'react';
 import { z } from 'zod';
 
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuGroup,
-	DropdownMenuItem,
-	DropdownMenuTrigger,
-} from '@/ui/_shadcn/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/_shadcn/dropdown-menu';
 import { AuthForm } from '@/ui/components/auth-form';
 import { ProfileModal } from '@/ui/components/profile-modal';
 import { SettingsModal } from '@/ui/components/settings-modal';
@@ -133,13 +127,11 @@ function RootLayout() {
 						<div className='flex items-center gap-3'>
 							{/* User avatar dropdown */}
 							<DropdownMenu>
-								<DropdownMenuTrigger asChild>
-									<button
-										type='button'
-										className='flex h-8 w-8 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
-									>
-										<IconMenu2 size={18} />
-									</button>
+								<DropdownMenuTrigger
+									type='button'
+									className='flex h-8 w-8 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+								>
+									<IconMenu2 size={18} />
 								</DropdownMenuTrigger>
 								<DropdownMenuContent align='end' className='w-56'>
 									<DropdownMenuGroup>
