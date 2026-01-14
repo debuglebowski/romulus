@@ -4,9 +4,10 @@
 	"version": "0.0.0",
 	"type": "module",
 	"scripts": {
+		"bump:patch": "bun pm version patch",
 		"dev": "vite",
 		"dev:convex": "convex dev",
-		"build": "tsc -b && vite build",
+		"build": "vite build",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
 		"test": "vitest",
