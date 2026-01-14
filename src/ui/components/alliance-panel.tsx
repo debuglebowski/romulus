@@ -66,7 +66,7 @@ const SHARING_LABELS: Record<SharingType, { label: string; icon: React.ReactNode
 
 const SHARING_TYPES: SharingType[] = ['vision', 'gold', 'upgrades', 'armyPositions', 'spyIntel'];
 
-export function AlliancePanel({ gameId, isCapitalMoving = false, open, onOpenChange, players = [] }: AlliancePanelProps) {
+export function AlliancePanel({ gameId, isCapitalMoving = false, open, onOpenChange }: AlliancePanelProps) {
 	const allianceData = useQuery(api.alliances.getAlliances, { gameId: gameId as Id<'games'> });
 	const otherPlayers = useQuery(api.alliances.getOtherPlayers, { gameId: gameId as Id<'games'> });
 

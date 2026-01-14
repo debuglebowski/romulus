@@ -234,34 +234,37 @@ export function UpgradesModal({
 
 									{/* Branches */}
 									<div className='space-y-2 pl-6'>
-										{branches.map((branch, idx) => (
-											<div key={idx} className='flex items-center gap-2'>
-												{/* Tier 1 */}
-												<UpgradeNode
-													upgrade={branch.tier1}
-													status={getUpgradeStatus(branch.tier1)}
-													canAfford={canAfford(branch.tier1)}
-													missingRequirement={getMissingRequirement(branch.tier1)}
-													isPurchasing={purchasing === branch.tier1.id}
-													onPurchase={() => handlePurchase(branch.tier1.id)}
-												/>
+										{branches.map((branch, idx) => {
+											const tier2 = branch.tier2;
+											return (
+												<div key={idx} className='flex items-center gap-2'>
+													{/* Tier 1 */}
+													<UpgradeNode
+														upgrade={branch.tier1}
+														status={getUpgradeStatus(branch.tier1)}
+														canAfford={canAfford(branch.tier1)}
+														missingRequirement={getMissingRequirement(branch.tier1)}
+														isPurchasing={purchasing === branch.tier1.id}
+														onPurchase={() => handlePurchase(branch.tier1.id)}
+													/>
 
-												{/* Arrow to tier 2 */}
-												{branch.tier2 && (
-													<>
-														<IconArrowRight size={16} className='text-[var(--text-faint)] shrink-0' />
-														<UpgradeNode
-															upgrade={branch.tier2}
-															status={getUpgradeStatus(branch.tier2)}
-															canAfford={canAfford(branch.tier2)}
-															missingRequirement={getMissingRequirement(branch.tier2)}
-															isPurchasing={purchasing === branch.tier2.id}
-															onPurchase={() => handlePurchase(branch.tier2.id)}
-														/>
-													</>
-												)}
-											</div>
-										))}
+													{/* Arrow to tier 2 */}
+													{tier2 ? (
+														<>
+															<IconArrowRight size={16} className='text-[var(--text-faint)] shrink-0' />
+															<UpgradeNode
+																upgrade={tier2}
+																status={getUpgradeStatus(tier2)}
+																canAfford={canAfford(tier2)}
+																missingRequirement={getMissingRequirement(tier2)}
+																isPurchasing={purchasing === tier2.id}
+																onPurchase={() => handlePurchase(tier2.id)}
+															/>
+														</>
+													) : null}
+												</div>
+											);
+										})}
 									</div>
 								</div>
 							);

@@ -17,12 +17,18 @@ import { UpgradesModal } from '@/ui/components/upgrades-modal';
 
 import { api } from '../../../../convex/_generated/api';
 import { computeHorizon, coordKey, findPath } from '../../../../convex/lib/hex';
+import { z } from 'zod';
 
 import type { ArmyData, SpyData, TileData } from '@/ui/components/hex-map';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
+const gameSearchSchema = z.object({
+	settings: z.enum(['open']).optional(),
+});
+
 export const Route = createFileRoute('/game/$gameId/')({
 	component: GamePage,
+	validateSearch: gameSearchSchema,
 });
 
 type SelectionMode = 'default' | 'move' | 'rally' | 'spy-move';
@@ -91,7 +97,7 @@ function GamePage() {
 
 	// Elimination modal state
 	const [showEliminatedModal, setShowEliminatedModal] = useState(false);
-	const prevEliminatedRef = useRef<number | undefined>();
+	const prevEliminatedRef = useRef<number | undefined>(undefined);
 
 	// Local ratio state for optimistic UI
 	const [localRatios, setLocalRatios] = useState<{
@@ -824,7 +830,9 @@ function GamePage() {
 	}, [gameId, abandonMutation, navigate, isEliminated]);
 
 	const handleOpenSettings = useCallback(() => {
-		navigate({ search: { settings: 'open' } });
+		navigate({ 
+			search: (prev) => ({ ...prev, settings: 'open' as const })
+		} as Parameters<typeof navigate>[0]);
 	}, [navigate]);
 
 	const handleOpenAlliances = useCallback(() => {
@@ -876,7 +884,8 @@ function GamePage() {
 		);
 	}
 
-	if (game.status !== 'inProgress' && game.status !== 'starting') {
+	// Allow rendering for finished games (e.g., for eliminated players viewing results)
+	if (game.status !== 'inProgress' && game.status !== 'starting' && game.status !== 'finished') {
 		return null;
 	}
 

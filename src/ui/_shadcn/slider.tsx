@@ -27,11 +27,11 @@ function Slider({
   // Normalize the callback to always pass an array
   // Base-ui may pass a single number for single-thumb sliders
   const handleValueChange = React.useCallback(
-    (newValue: number | number[], event: SliderPrimitive.Root.ChangeEventDetails) => {
+    (newValue: number | readonly number[], event: SliderPrimitive.Root.ChangeEventDetails) => {
       if (!onValueChange) {
         return;
       }
-      const normalized = Array.isArray(newValue) ? newValue : [newValue];
+      const normalized = Array.isArray(newValue) ? [...newValue] : [newValue];
       onValueChange(normalized, event);
     },
     [onValueChange]

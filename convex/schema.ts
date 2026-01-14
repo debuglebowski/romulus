@@ -49,6 +49,9 @@ const schema = defineSchema({
 		finishedAt: v.optional(v.number()),
 		currentTick: v.optional(v.number()),
 		lastTickAt: v.optional(v.number()),
+		isPaused: v.optional(v.boolean()),
+		pausedByPlayerId: v.optional(v.id('gamePlayers')),
+		pausedAt: v.optional(v.number()),
 	}).index('by_status', ['status']),
 
 	tiles: defineTable({
@@ -191,6 +194,7 @@ const schema = defineSchema({
 		upgradeId: v.string(),
 		purchasedAt: v.number(),
 	})
+		.index('by_gameId', ['gameId'])
 		.index('by_playerId', ['playerId'])
 		.index('by_playerId_upgradeId', ['playerId', 'upgradeId']),
 

@@ -19,9 +19,15 @@ import { SettingsModal } from '@/ui/components/settings-modal';
 import { TutorialOverlay } from '@/ui/components/tutorial/tutorial-overlay';
 
 import { api } from '../../convex/_generated/api';
+import { z } from 'zod';
+
+const rootSearchSchema = z.object({
+	settings: z.enum(['open']).optional(),
+});
 
 export const Route = createRootRoute({
 	component: RootLayout,
+	validateSearch: rootSearchSchema,
 });
 
 function RootLayout() {
@@ -40,9 +46,16 @@ function RootLayout() {
 	const setSettingsOpen = useCallback(
 		(open: boolean) => {
 			if (open) {
-				navigate({ search: { settings: 'open' } });
+				navigate({ 
+					search: (prev) => ({ ...prev, settings: 'open' as const })
+				} as Parameters<typeof navigate>[0]);
 			} else {
-				navigate({ search: {} });
+				navigate({ 
+					search: (prev) => {
+						const { settings: _, ...rest } = prev;
+						return rest;
+					}
+				} as Parameters<typeof navigate>[0]);
 			}
 		},
 		[navigate],

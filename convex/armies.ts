@@ -420,7 +420,6 @@ export const getVisibleForPlayer = query({
 		}
 
 		const tileMap = new Map(allTiles.map((t) => [t._id, t]));
-		const _tileByCoord = new Map(allTiles.map((t) => [coordKey(t.q, t.r), t]));
 
 		// Compute Line of Sight from player's owned tiles
 		const ownedTiles = allTiles.filter((t) => t.ownerId === player._id);

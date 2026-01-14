@@ -18,7 +18,7 @@ type TutorialStepProps = {
  * Used by all individual step components (welcome, movement, combat, etc.)
  * Includes built-in staggered animation for child elements.
  */
-export function TutorialStep({ illustration, children, className, isAnimating = false }: TutorialStepProps) {
+export function TutorialStep({ illustration, children, className }: TutorialStepProps) {
 	return (
 		<div
 			className={cn(

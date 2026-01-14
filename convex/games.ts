@@ -699,7 +699,7 @@ export const setRatios = mutation({
 				const existingRallyArmy = armies.find((a) => a.tileId === player.rallyPointTileId && !a.targetTileId);
 
 				if (existingRallyArmy) {
-					const existingCount = Number.isFinite(existingRallyArmy.count) ? existingRallyArmy.count : 0;
+					const existingCount = existingRallyArmy.count ?? 0;
 					await ctx.db.patch(existingRallyArmy._id, {
 						count: existingCount + toConscript,
 					});
@@ -717,7 +717,7 @@ export const setRatios = mutation({
 			const capitalArmy = armies.find((a) => a.tileId === capitalTile?._id && !a.targetTileId);
 
 			if (capitalArmy) {
-				const capitalCount = Number.isFinite(capitalArmy.count) ? capitalArmy.count : 0;
+				const capitalCount = capitalArmy.count ?? 0;
 				const toDemobilize = Math.min(currentMilitary - targetMilitary, capitalCount);
 				newPopulation += toDemobilize;
 

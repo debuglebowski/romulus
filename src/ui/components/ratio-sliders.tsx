@@ -110,7 +110,7 @@ function SliderRow({
 					{value}% ({count})
 				</span>
 			</div>
-			<Slider value={[value]} min={0} max={100} step={1} onValueChange={(vals: number[]) => onChange(vals[0])} />
+			<Slider value={[value]} min={0} max={100} step={1} onValueChange={(vals) => onChange(Array.isArray(vals) ? vals[0] : vals)} />
 		</div>
 	);
 }

@@ -47,7 +47,7 @@ export function TutorialOverlay({ open, onOpenChange, onComplete, onSkip, initia
 	const [currentStep, setCurrentStep] = useState(initialStep);
 	const [isSkipConfirmOpen, setIsSkipConfirmOpen] = useState(false);
 	const [isTransitioning, setIsTransitioning] = useState(false);
-	const [transitionDirection, setTransitionDirection] = useState<'next' | 'prev'>('next');
+	const [_transitionDirection, setTransitionDirection] = useState<'next' | 'prev'>('next');
 	const prevStepRef = useRef(initialStep);
 
 	const updateTutorialStep = useMutation(api.users.updateTutorialStep);
