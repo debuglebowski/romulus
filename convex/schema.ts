@@ -40,12 +40,7 @@ const schema = defineSchema({
 		hostId: v.id('users'),
 		maxPlayers: v.number(),
 		mapSize: v.optional(v.union(v.literal('small'), v.literal('standard'))),
-		status: v.union(
-			v.literal('waiting'),
-			v.literal('starting'),
-			v.literal('inProgress'),
-			v.literal('finished'),
-		),
+		status: v.union(v.literal('waiting'), v.literal('starting'), v.literal('inProgress'), v.literal('finished')),
 		startCountdownEndsAt: v.optional(v.number()),
 		startedAt: v.optional(v.number()),
 		finishedAt: v.optional(v.number()),
@@ -94,9 +89,7 @@ const schema = defineSchema({
 		capitalMovePath: v.optional(v.array(v.object({ q: v.number(), r: v.number() }))),
 
 		eliminatedAt: v.optional(v.number()),
-		eliminationReason: v.optional(
-			v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit')),
-		),
+		eliminationReason: v.optional(v.union(v.literal('capitalCaptured'), v.literal('debt'), v.literal('forfeit'))),
 		finishPosition: v.optional(v.number()),
 		statTimeLasted: v.optional(v.number()),
 		statPeakCities: v.optional(v.number()),
@@ -180,13 +173,7 @@ const schema = defineSchema({
 	allianceSharing: defineTable({
 		allianceId: v.id('alliances'),
 		playerId: v.id('gamePlayers'),
-		sharingType: v.union(
-			v.literal('vision'),
-			v.literal('gold'),
-			v.literal('upgrades'),
-			v.literal('armyPositions'),
-			v.literal('spyIntel'),
-		),
+		sharingType: v.union(v.literal('vision'), v.literal('gold'), v.literal('upgrades'), v.literal('armyPositions'), v.literal('spyIntel')),
 		enabled: v.boolean(),
 	}).index('by_allianceId', ['allianceId']),
 

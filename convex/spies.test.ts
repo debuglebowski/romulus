@@ -22,12 +22,12 @@ function calculateCancelPathIndex(progress: number, pathLength: number): number 
 
 describe('Spy Movement Constants', () => {
 	it('has correct travel time per hex', () => {
-		expect(TRAVEL_TIME_PER_HEX).toBe(7000);
+		expect(TRAVEL_TIME_PER_HEX).toBe(2333); // 3x speed (was 7000)
 	});
 
 	it('travel time matches military unit speed', () => {
 		// Both spies and military units use 7 seconds per hex (1.43x speed)
-		const MILITARY_TRAVEL_TIME_PER_HEX = 7000;
+		const MILITARY_TRAVEL_TIME_PER_HEX = 2333; // 3x speed (was 7000)
 		expect(TRAVEL_TIME_PER_HEX).toBe(MILITARY_TRAVEL_TIME_PER_HEX);
 	});
 });

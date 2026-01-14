@@ -863,6 +863,74 @@ function GamePage() {
 		return () => clearInterval(interval);
 	}, [pauseState?.isPaused]);
 
+	// Keyboard shortcut for entering move mode (m key)
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			// Only handle 'm' key
+			if (event.key !== 'm' && event.key !== 'M') {
+				return;
+			}
+
+			// Don't trigger if user is typing in an input field
+			if (
+				event.target instanceof HTMLInputElement ||
+				event.target instanceof HTMLTextAreaElement ||
+				event.target instanceof HTMLSelectElement
+			) {
+				return;
+			}
+
+			// Block if modals are open
+			if (showUpgrades || showAlliances || leaveDialogOpen || showEliminatedModal) {
+				return;
+			}
+
+			// Block if eliminated
+			if (isEliminated) {
+				return;
+			}
+
+			// Block if capital is moving
+			if (economy?.capitalMovingToTileId) {
+				return;
+			}
+
+			// Block if game is paused
+			if (pauseState?.isPaused) {
+				return;
+			}
+
+			// REQUIRED: Only work when a tile is selected
+			if (!selectedTileId) {
+				return;
+			}
+
+			// Find the first own army on the selected tile
+			const ownArmy = stationaryArmiesOnTile.find((a) => a.isOwn);
+			if (!ownArmy) {
+				return;
+			}
+
+			// Enter move mode
+			event.preventDefault();
+			handleSetMoveMode(ownArmy._id);
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, [
+		selectedTileId,
+		stationaryArmiesOnTile,
+		handleSetMoveMode,
+		showUpgrades,
+		showAlliances,
+		leaveDialogOpen,
+		showEliminatedModal,
+		isEliminated,
+		economy?.capitalMovingToTileId,
+		pauseState?.isPaused,
+	]);
+
 	// Redirect guards
 	useEffect(() => {
 		if (game?.status === 'waiting') {

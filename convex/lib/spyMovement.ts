@@ -1,6 +1,6 @@
 // Spy movement calculation functions extracted for testability
 
-export const TRAVEL_TIME_PER_HEX = 7000; // 7 seconds per hex (1.43x speed)
+export const TRAVEL_TIME_PER_HEX = 2333; // ~2.33 seconds per hex (3x speed, was 7 seconds)
 
 export function calculateTravelTime(pathLength: number): number {
 	return pathLength * TRAVEL_TIME_PER_HEX;
@@ -9,7 +9,9 @@ export function calculateTravelTime(pathLength: number): number {
 export function calculateProgress(departureTime: number, arrivalTime: number, currentTime: number): number {
 	const elapsed = currentTime - departureTime;
 	const totalTime = arrivalTime - departureTime;
-	if (totalTime === 0) return 1;
+	if (totalTime === 0) {
+		return 1;
+	}
 	return Math.min(elapsed / totalTime, 1);
 }
 

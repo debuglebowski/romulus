@@ -152,9 +152,9 @@ export const processTick = internalMutation({
 			const playerSpies = allSpies.filter((s) => s.ownerId === player._id);
 			const spyUpkeep = playerSpies.length * UPKEEP_PER_SPY;
 
-			// Gold: 1 gold/sec per 5 labourers - upkeep
+			// Gold: 1 gold/sec per 5 labourers - upkeep (3x speed)
 			const upkeepCost = militaryUpkeep + spyUpkeep;
-			const goldPerTick = (labourers / 5 - upkeepCost) * (1 + (modifiers.labourEfficiencyBonus ?? 0));
+			const goldPerTick = ((labourers / 5 - upkeepCost) * (1 + (modifiers.labourEfficiencyBonus ?? 0))) * 3;
 			const newGold = (player.gold ?? 0) + goldPerTick;
 
 			// Population growth (only if total units below combined cap)
@@ -163,7 +163,7 @@ export const processTick = internalMutation({
 			const totalUnits = player.population + totalMilitary + playerSpies.length;
 
 			if (totalUnits < popCap) {
-				const popGrowthPerTick = ((labourers / 10 + cityCount * 0.5) / 45) * (1 + (modifiers.popGrowthBonus ?? 0));
+				const popGrowthPerTick = (((labourers / 10 + cityCount * 0.5) / 45) * (1 + (modifiers.popGrowthBonus ?? 0))) * 3;
 				newPopAccumulator += popGrowthPerTick;
 
 				if (newPopAccumulator >= 1) {
@@ -255,8 +255,8 @@ export const processTick = internalMutation({
 			// Military spawning
 			let newMilAccumulator = player.militaryAccumulator ?? 0;
 			if (military > 0 && player.rallyPointTileId) {
-				// Spawn rate: 1 unit per 45 seconds per military pop assigned (1.33x speed)
-				const spawnRate = military / 45;
+				// Spawn rate: 1 unit per 45 seconds per military pop assigned (3x speed)
+				const spawnRate = (military / 45) * 3;
 				newMilAccumulator += spawnRate;
 
 				if (newMilAccumulator >= 1) {
@@ -292,8 +292,8 @@ export const processTick = internalMutation({
 			const spyPopulation = Math.floor(player.population * ((player.spyRatio ?? 0) / 100));
 			let newSpyAccumulator = player.spyAccumulator ?? 0;
 			if (spyPopulation > 0 && player.rallyPointTileId) {
-				// Spawn rate: 1 spy per 45 seconds per spy pop assigned (1.33x speed)
-				const spawnRate = spyPopulation / 45;
+				// Spawn rate: 1 spy per 45 seconds per spy pop assigned (3x speed)
+				const spawnRate = (spyPopulation / 45) * 3;
 				newSpyAccumulator += spawnRate;
 
 				if (newSpyAccumulator >= 1) {
@@ -484,10 +484,10 @@ export const processTick = internalMutation({
 			// Calculate time delta
 			const timeDelta = now - progress.lastUpdateTime;
 
-			// Update accumulated time if spies present
+			// Update accumulated time if spies present (3x speed)
 			let newAccumulatedTime = progress.accumulatedTime;
 			if (spyCount > 0) {
-				newAccumulatedTime += timeDelta * spyCount;
+				newAccumulatedTime += timeDelta * spyCount * 3;
 			}
 
 			// Calculate new tier

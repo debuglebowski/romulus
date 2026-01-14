@@ -19,6 +19,7 @@ function NewGamePage() {
 	const create = useMutation(api.games.create);
 	const [name, setName] = useState('');
 	const [maxPlayers, setMaxPlayers] = useState(6);
+	const [mapSize, setMapSize] = useState<'small' | 'standard'>('standard');
 	const [error, setError] = useState('');
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -28,7 +29,7 @@ function NewGamePage() {
 		setIsSubmitting(true);
 
 		try {
-			const gameId = await create({ name, maxPlayers });
+			const gameId = await create({ name, maxPlayers, mapSize });
 			navigate({ to: '/game/$gameId/lobby', params: { gameId } });
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to create game');
@@ -76,6 +77,19 @@ function NewGamePage() {
 								</SelectContent>
 							</Select>
 							<p className='text-muted-foreground text-sm'>2-6 players</p>
+						</div>
+
+						<div className='space-y-2'>
+							<Label>Map Size</Label>
+							<Select value={mapSize} onValueChange={(val) => setMapSize(val as 'small' | 'standard')}>
+								<SelectTrigger className='w-full'>
+									<SelectValue />
+								</SelectTrigger>
+								<SelectContent>
+									<SelectItem value='small'>Small</SelectItem>
+									<SelectItem value='standard'>Standard</SelectItem>
+								</SelectContent>
+							</Select>
 						</div>
 
 						{error && <p className='text-destructive text-sm'>{error}</p>}
