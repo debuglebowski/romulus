@@ -161,6 +161,53 @@ const schema = defineSchema({
 	})
 		.index('by_gameId_playerId', ['gameId', 'playerId'])
 		.index('by_gameId_playerId_coords', ['gameId', 'playerId', 'q', 'r']),
+
+	alliances: defineTable({
+		gameId: v.id('games'),
+		player1Id: v.id('gamePlayers'),
+		player2Id: v.id('gamePlayers'),
+		status: v.union(v.literal('pending'), v.literal('active')),
+		createdAt: v.number(),
+	})
+		.index('by_player1Id', ['player1Id'])
+		.index('by_player2Id', ['player2Id']),
+
+	allianceSharing: defineTable({
+		allianceId: v.id('alliances'),
+		playerId: v.id('gamePlayers'),
+		sharingType: v.union(
+			v.literal('vision'),
+			v.literal('gold'),
+			v.literal('upgrades'),
+			v.literal('armyPositions'),
+			v.literal('spyIntel'),
+		),
+		enabled: v.boolean(),
+	}).index('by_allianceId', ['allianceId']),
+
+	playerUpgrades: defineTable({
+		gameId: v.id('games'),
+		playerId: v.id('gamePlayers'),
+		upgradeId: v.string(),
+		purchasedAt: v.number(),
+	})
+		.index('by_playerId', ['playerId'])
+		.index('by_playerId_upgradeId', ['playerId', 'upgradeId']),
+
+	knownEnemyUpgrades: defineTable({
+		playerId: v.id('gamePlayers'),
+		enemyPlayerId: v.id('gamePlayers'),
+		upgradeId: v.string(),
+		revealSource: v.string(),
+		revealedAt: v.number(),
+	}).index('by_playerId', ['playerId']),
+
+	capitalIntelProgress: defineTable({
+		spyOwnerId: v.id('gamePlayers'),
+		targetPlayerId: v.id('gamePlayers'),
+		startedAt: v.number(),
+		currentTier: v.number(),
+	}).index('by_spyOwnerId', ['spyOwnerId']),
 });
 
 export default schema;
