@@ -8,7 +8,7 @@ import { getUpgradeModifiers } from './upgrades';
 
 import type { Id } from './_generated/dataModel';
 
-const TRAVEL_TIME_PER_HEX = 10000; // 10 seconds per hex
+const TRAVEL_TIME_PER_HEX = 7000; // 7 seconds per hex (1.43x speed)
 const UNIT_BASE_HP = 100;
 
 export const getForGame = query({

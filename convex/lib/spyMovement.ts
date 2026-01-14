@@ -1,6 +1,6 @@
 // Spy movement calculation functions extracted for testability
 
-export const TRAVEL_TIME_PER_HEX = 10000; // 10 seconds per hex
+export const TRAVEL_TIME_PER_HEX = 7000; // 7 seconds per hex (1.43x speed)
 
 export function calculateTravelTime(pathLength: number): number {
 	return pathLength * TRAVEL_TIME_PER_HEX;

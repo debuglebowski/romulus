@@ -1195,17 +1195,17 @@ describe('calculateSpiesFromRatio', () => {
 describe('calculatePopulationGrowthPerTick', () => {
 	it('calculates growth with labourers only', () => {
 		const growth = calculatePopulationGrowthPerTick(60, 0);
-		expect(growth).toBeCloseTo(0.1, 10); // (60 / 10 + 0) / 60 = 0.1
+		expect(growth).toBeCloseTo(0.13333, 4); // (60 / 10 + 0) / 45 = 0.13333 (1.33x speed)
 	});
 
 	it('calculates growth with cities only', () => {
 		const growth = calculatePopulationGrowthPerTick(0, 2);
-		expect(growth).toBeCloseTo(0.01667, 4); // (0 + 1.0) / 60 = 0.01667
+		expect(growth).toBeCloseTo(0.02222, 4); // (0 + 1.0) / 45 = 0.02222 (1.33x speed)
 	});
 
 	it('calculates growth with both labourers and cities', () => {
 		const growth = calculatePopulationGrowthPerTick(60, 2);
-		expect(growth).toBeCloseTo(0.11667, 4); // (6 + 1.0) / 60 = 0.11667
+		expect(growth).toBeCloseTo(0.15556, 4); // (6 + 1.0) / 45 = 0.15556 (1.33x speed)
 	});
 
 	it('calculates growth with zero labourers and zero cities', () => {
@@ -1215,22 +1215,22 @@ describe('calculatePopulationGrowthPerTick', () => {
 
 	it('calculates growth for small labour force', () => {
 		const growth = calculatePopulationGrowthPerTick(10, 0);
-		expect(growth).toBeCloseTo(0.01667, 4); // (10 / 10) / 60 = 0.01667
+		expect(growth).toBeCloseTo(0.02222, 4); // (10 / 10) / 45 = 0.02222 (1.33x speed)
 	});
 
 	it('calculates growth for large labour force', () => {
 		const growth = calculatePopulationGrowthPerTick(600, 0);
-		expect(growth).toBe(1.0); // (600 / 10) / 60 = 1.0
+		expect(growth).toBeCloseTo(1.33333, 4); // (600 / 10) / 45 = 1.33333 (1.33x speed)
 	});
 
 	it('calculates growth with single city', () => {
 		const growth = calculatePopulationGrowthPerTick(30, 1);
-		expect(growth).toBeCloseTo(0.05833, 4); // (3 + 0.5) / 60 = 0.05833
+		expect(growth).toBeCloseTo(0.07778, 4); // (3 + 0.5) / 45 = 0.07778 (1.33x speed)
 	});
 
 	it('calculates growth with multiple cities', () => {
 		const growth = calculatePopulationGrowthPerTick(100, 5);
-		expect(growth).toBeCloseTo(0.20833, 4); // (10 + 2.5) / 60 = 0.20833
+		expect(growth).toBeCloseTo(0.27778, 4); // (10 + 2.5) / 45 = 0.27778 (1.33x speed)
 	});
 
 	it('cities contribute 0.5 per city', () => {
@@ -1251,7 +1251,7 @@ describe('calculatePopulationGrowthPerTick', () => {
 
 	it('handles fractional labourer contributions', () => {
 		const growth = calculatePopulationGrowthPerTick(15, 0);
-		expect(growth).toBeCloseTo(0.025, 4); // (15 / 10) / 60 = 0.025
+		expect(growth).toBeCloseTo(0.03333, 4); // (15 / 10) / 45 = 0.03333 (1.33x speed)
 	});
 });
 
@@ -1321,7 +1321,7 @@ describe('Resource Generation with Ratio Integration', () => {
 		expect(labourers).toBe(90);
 
 		const growth = calculatePopulationGrowthPerTick(labourers, cityCount);
-		expect(growth).toBeCloseTo(0.175, 4); // (9 + 1.5) / 60
+		expect(growth).toBeCloseTo(0.23333, 4); // (9 + 1.5) / 45 = 0.23333 (1.33x speed)
 	});
 
 	it('verifies higher labour ratio increases gold generation', () => {

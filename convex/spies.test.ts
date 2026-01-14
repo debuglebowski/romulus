@@ -22,12 +22,12 @@ function calculateCancelPathIndex(progress: number, pathLength: number): number 
 
 describe('Spy Movement Constants', () => {
 	it('has correct travel time per hex', () => {
-		expect(TRAVEL_TIME_PER_HEX).toBe(10000);
+		expect(TRAVEL_TIME_PER_HEX).toBe(7000);
 	});
 
 	it('travel time matches military unit speed', () => {
-		// Both spies and military units use 10 seconds per hex
-		const MILITARY_TRAVEL_TIME_PER_HEX = 10000;
+		// Both spies and military units use 7 seconds per hex (1.43x speed)
+		const MILITARY_TRAVEL_TIME_PER_HEX = 7000;
 		expect(TRAVEL_TIME_PER_HEX).toBe(MILITARY_TRAVEL_TIME_PER_HEX);
 	});
 });
@@ -35,17 +35,17 @@ describe('Spy Movement Constants', () => {
 describe('calculateTravelTime', () => {
 	it('calculates travel time for single hex', () => {
 		const travelTime = calculateTravelTime(1);
-		expect(travelTime).toBe(10000); // 10 seconds
+		expect(travelTime).toBe(7000); // 7 seconds
 	});
 
 	it('calculates travel time for multiple hexes', () => {
 		const travelTime = calculateTravelTime(5);
-		expect(travelTime).toBe(50000); // 50 seconds
+		expect(travelTime).toBe(35000); // 35 seconds
 	});
 
 	it('calculates travel time for long path', () => {
 		const travelTime = calculateTravelTime(20);
-		expect(travelTime).toBe(200000); // 200 seconds = 3m 20s
+		expect(travelTime).toBe(140000); // 140 seconds = 2m 20s
 	});
 
 	it('returns zero for zero-length path', () => {
@@ -61,14 +61,14 @@ describe('calculateTravelTime', () => {
 
 	it('calculates travel time for very long journey', () => {
 		const travelTime = calculateTravelTime(100);
-		expect(travelTime).toBe(1000000); // 1000 seconds = 16m 40s
+		expect(travelTime).toBe(700000); // 700 seconds = 11m 40s
 	});
 });
 
 describe('calculateProgress', () => {
 	it('returns 0 at departure time', () => {
 		const departureTime = 1000;
-		const arrivalTime = 11000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
 		const currentTime = 1000;
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
@@ -77,8 +77,8 @@ describe('calculateProgress', () => {
 
 	it('returns 1 at arrival time', () => {
 		const departureTime = 1000;
-		const arrivalTime = 11000;
-		const currentTime = 11000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
+		const currentTime = 8000;
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
 		expect(progress).toBe(1);
@@ -86,8 +86,8 @@ describe('calculateProgress', () => {
 
 	it('returns 0.5 at halfway point', () => {
 		const departureTime = 1000;
-		const arrivalTime = 11000;
-		const currentTime = 6000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
+		const currentTime = 4500; // halfway: 1000 + 3500
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
 		expect(progress).toBe(0.5);
@@ -113,7 +113,7 @@ describe('calculateProgress', () => {
 
 	it('clamps progress to 1 when past arrival time', () => {
 		const departureTime = 1000;
-		const arrivalTime = 11000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
 		const currentTime = 15000;
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
@@ -122,7 +122,7 @@ describe('calculateProgress', () => {
 
 	it('clamps progress to 1 when significantly past arrival time', () => {
 		const departureTime = 1000;
-		const arrivalTime = 11000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
 		const currentTime = 100000;
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
@@ -156,8 +156,8 @@ describe('calculateProgress', () => {
 
 	it('handles very long journeys', () => {
 		const departureTime = 0;
-		const arrivalTime = 1000000; // 1000 seconds
-		const currentTime = 500000; // 500 seconds
+		const arrivalTime = 700000; // 700 seconds (100 hexes)
+		const currentTime = 350000; // 350 seconds (halfway)
 
 		const progress = calculateProgress(departureTime, arrivalTime, currentTime);
 		expect(progress).toBe(0.5);
@@ -371,7 +371,7 @@ describe('isMovementComplete', () => {
 
 	it('returns false immediately after departure', () => {
 		const currentTime = 1001;
-		const arrivalTime = 11000;
+		const arrivalTime = 8000; // 1 hex = 7000ms
 
 		expect(isMovementComplete(currentTime, arrivalTime)).toBe(false);
 	});
@@ -679,11 +679,11 @@ describe('Spy Movement Edge Cases', () => {
 		const pathLength = 1;
 		const travelTime = calculateTravelTime(pathLength);
 
-		expect(travelTime).toBe(10000); // 10 seconds
+		expect(travelTime).toBe(7000); // 7 seconds
 
 		const departureTime = 0;
 		const arrivalTime = departureTime + travelTime;
-		const midTime = 5000;
+		const midTime = 3500; // halfway: 7000 / 2
 
 		const progress = calculateProgress(departureTime, arrivalTime, midTime);
 		expect(progress).toBe(0.5);
@@ -696,11 +696,11 @@ describe('Spy Movement Edge Cases', () => {
 		const pathLength = 100;
 		const travelTime = calculateTravelTime(pathLength);
 
-		expect(travelTime).toBe(1000000); // 1000 seconds = 16m 40s
+		expect(travelTime).toBe(700000); // 700 seconds = 11m 40s
 
 		const departureTime = 0;
 		const arrivalTime = departureTime + travelTime;
-		const midTime = 500000;
+		const midTime = 350000; // halfway: 700000 / 2
 
 		const progress = calculateProgress(departureTime, arrivalTime, midTime);
 		expect(progress).toBe(0.5);

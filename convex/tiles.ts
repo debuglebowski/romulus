@@ -8,7 +8,7 @@ import type { Id } from './_generated/dataModel';
 import type { MutationCtx } from './_generated/server';
 
 const CITY_BUILD_COST = 50;
-const CAPITAL_TRAVEL_TIME_PER_HEX = 30000; // 30 seconds per hex
+const CAPITAL_TRAVEL_TIME_PER_HEX = 20000; // 20 seconds per hex (1.5x speed)
 
 // Initialize allegiance scores for a city tile
 // Owner starts at 100, all other players at 0

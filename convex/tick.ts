@@ -24,7 +24,7 @@ import { getUpgradeModifiers } from './upgrades';
 
 import type { Id } from './_generated/dataModel';
 
-const TICK_INTERVAL_MS = 1000; // 1 second per tick
+const TICK_INTERVAL_MS = 750; // 0.75 seconds per tick (1.33x speed)
 
 function randomRange(min: number, max: number): number {
 	return Math.random() * (max - min) + min;
@@ -163,7 +163,7 @@ export const processTick = internalMutation({
 			const totalUnits = player.population + totalMilitary + playerSpies.length;
 
 			if (totalUnits < popCap) {
-				const popGrowthPerTick = ((labourers / 10 + cityCount * 0.5) / 60) * (1 + (modifiers.popGrowthBonus ?? 0));
+				const popGrowthPerTick = ((labourers / 10 + cityCount * 0.5) / 45) * (1 + (modifiers.popGrowthBonus ?? 0));
 				newPopAccumulator += popGrowthPerTick;
 
 				if (newPopAccumulator >= 1) {
@@ -255,8 +255,8 @@ export const processTick = internalMutation({
 			// Military spawning
 			let newMilAccumulator = player.militaryAccumulator ?? 0;
 			if (military > 0 && player.rallyPointTileId) {
-				// Spawn rate: 1 unit per 60 seconds per military pop assigned
-				const spawnRate = military / 60;
+				// Spawn rate: 1 unit per 45 seconds per military pop assigned (1.33x speed)
+				const spawnRate = military / 45;
 				newMilAccumulator += spawnRate;
 
 				if (newMilAccumulator >= 1) {
@@ -292,8 +292,8 @@ export const processTick = internalMutation({
 			const spyPopulation = Math.floor(player.population * ((player.spyRatio ?? 0) / 100));
 			let newSpyAccumulator = player.spyAccumulator ?? 0;
 			if (spyPopulation > 0 && player.rallyPointTileId) {
-				// Spawn rate: 1 spy per 60 seconds per spy pop assigned
-				const spawnRate = spyPopulation / 60;
+				// Spawn rate: 1 spy per 45 seconds per spy pop assigned (1.33x speed)
+				const spawnRate = spyPopulation / 45;
 				newSpyAccumulator += spawnRate;
 
 				if (newSpyAccumulator >= 1) {
@@ -793,7 +793,7 @@ export const processTick = internalMutation({
 
 				const timeSinceLastUpdate = now - allegiance.lastUpdateTime;
 
-				// Only update every 10 seconds
+				// Only update every 7.5 seconds (ALLEGIANCE_UPDATE_INTERVAL)
 				if (timeSinceLastUpdate < ALLEGIANCE_UPDATE_INTERVAL) {
 					continue;
 				}

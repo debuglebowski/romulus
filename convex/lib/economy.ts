@@ -32,7 +32,7 @@ export function calculateSpiesFromRatio(population: number, spyRatio: number): n
 }
 
 export function calculatePopulationGrowthPerTick(labourers: number, cityCount: number): number {
-	return (labourers / 10 + cityCount * 0.5) / 60;
+	return (labourers / 10 + cityCount * 0.5) / 45; // 1.33x speed (was / 60)
 }
 
 // Spy detection
@@ -44,7 +44,7 @@ export const CAPITAL_INTEL_TIER_TIME = 180000; // 3 min per tier
 export const CAPITAL_INTEL_MAX_TIER = 5;
 
 // Allegiance system (Phase 6)
-export const ALLEGIANCE_UPDATE_INTERVAL = 10000; // 10 seconds
+export const ALLEGIANCE_UPDATE_INTERVAL = 7500; // 7.5 seconds (1.33x speed)
 export const ALLEGIANCE_NATURAL_DRIFT_OWNER = 1; // owner +1 per 10s
 export const ALLEGIANCE_NATURAL_DRIFT_OTHER = -1; // others -1 per 10s
 export const ALLEGIANCE_SPY_INFLUENCE_OWNER = -2; // owner -2 per spy per 10s
