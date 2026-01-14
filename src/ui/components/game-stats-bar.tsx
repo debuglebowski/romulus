@@ -1,4 +1,4 @@
-import { IconCoin, IconDoorExit, IconMenu2, IconPlayerPause, IconSettings, IconUsersGroup, IconUsers } from '@tabler/icons-react';
+import { IconDoorExit, IconMenu2, IconPlayerPause, IconSettings, IconUsersGroup, IconUsers } from '@tabler/icons-react';
 import { useEffect, useState } from 'react';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/ui/_shadcn/dropdown-menu';
@@ -60,19 +60,18 @@ export function GameStatsBar({
 	};
 
 	return (
-		<div className='flex items-center justify-between bg-gray-900 px-4 py-2 text-gray-100'>
+		<div className='flex items-center justify-between bg-[var(--bg-surface)] px-4 py-2 text-[var(--text-primary)]'>
 			<div className='flex items-center gap-6'>
 				<div className='flex items-center gap-2'>
-					<IconCoin className='h-4 w-4 text-yellow-500' />
-					<span className='font-medium'>{Math.floor(gold)}</span>
-					<span className='text-gray-400 text-sm'>
+					<span className='font-semibold text-[var(--accent)] tabular-nums'>{Math.floor(gold)}</span>
+					<span className='text-[var(--text-muted)] text-sm tabular-nums'>
 						({goldRate >= 0 ? '+' : ''}
 						{goldRate.toFixed(1)}/s)
 					</span>
 				</div>
 				<div className='flex items-center gap-2'>
-					<IconUsers className='h-4 w-4 text-blue-500' />
-					<span className='font-medium'>
+					<IconUsers className='h-4 w-4 text-[var(--text-muted)]' />
+					<span className='font-medium tabular-nums'>
 						{population}/{popCap}
 					</span>
 				</div>
@@ -84,7 +83,7 @@ export function GameStatsBar({
 					<button
 						type='button'
 						onClick={onOpenAlliances}
-						className='flex items-center gap-2 px-2 py-1 -my-1 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer'
+						className='flex items-center gap-2 px-2 py-1 -my-1 hover:bg-[var(--bg-raised)] cursor-pointer'
 						title='Manage alliances'
 					>
 						<div className='flex -space-x-1'>
@@ -93,7 +92,7 @@ export function GameStatsBar({
 								return (
 									<div
 										key={player._id}
-										className={`h-5 w-5 rounded-full border-2 ${isAlly ? 'border-blue-400' : 'border-gray-900'}`}
+										className={`h-5 w-5 border-2 ${isAlly ? 'border-[var(--accent)]' : 'border-[var(--border-default)]'}`}
 										style={{
 											backgroundColor: player.color,
 											opacity: player.eliminatedAt ? 0.3 : 1,
@@ -103,22 +102,22 @@ export function GameStatsBar({
 								);
 							})}
 						</div>
-						<span className='text-gray-400 text-sm'>
+						<span className='text-[var(--text-muted)] text-sm tabular-nums'>
 							{activePlayers}/{players.length}
 						</span>
 						{pendingAllianceCount > 0 && (
-							<span className='bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full'>
+							<span className='bg-[var(--accent)] text-black text-[10px] px-1.5 py-0.5 font-semibold tabular-nums'>
 								{pendingAllianceCount}
 							</span>
 						)}
 					</button>
 				)}
 
-				<div className='font-mono text-gray-400'>{formatTime(elapsed)}</div>
+				<div className='font-mono text-[var(--text-muted)] tabular-nums'>{formatTime(elapsed)}</div>
 
 				{/* Hamburger menu */}
 				<DropdownMenu>
-					<DropdownMenuTrigger className='cursor-pointer outline-none p-1 hover:bg-gray-800 rounded'>
+					<DropdownMenuTrigger className='cursor-pointer outline-none p-1 hover:bg-[var(--bg-raised)]'>
 						<IconMenu2 className='h-5 w-5' />
 					</DropdownMenuTrigger>
 					<DropdownMenuContent align='end' className='w-48'>
@@ -133,7 +132,7 @@ export function GameStatsBar({
 								<IconUsersGroup />
 								Alliances
 								{pendingAllianceCount > 0 && (
-									<span className='ml-auto bg-amber-600 text-white text-[10px] px-1.5 py-0.5 rounded-full'>
+									<span className='ml-auto bg-[var(--accent)] text-black text-[10px] px-1.5 py-0.5 font-semibold tabular-nums'>
 										{pendingAllianceCount}
 									</span>
 								)}

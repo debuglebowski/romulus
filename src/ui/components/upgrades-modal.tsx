@@ -159,22 +159,22 @@ export function UpgradesModal({
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
-			<DialogContent className='sm:max-w-2xl bg-zinc-900 z-100' showCloseButton={false}>
+			<DialogContent className='sm:max-w-2xl' showCloseButton={false}>
 				<DialogHeader>
 					<div className='flex items-center justify-between'>
 						<DialogTitle className='text-white'>Upgrades</DialogTitle>
 						<div className='flex items-center gap-4 text-sm'>
-							<div className='flex items-center gap-1.5 text-zinc-300'>
-								<IconCoins size={14} className='text-yellow-500' />
+							<div className='flex items-center gap-1.5 text-[var(--text-primary)]'>
+								<IconCoins size={14} className='text-[var(--accent)]' />
 								<span>{Math.floor(playerGold)}</span>
 							</div>
-							<div className='flex items-center gap-1.5 text-zinc-300'>
+							<div className='flex items-center gap-1.5 text-[var(--text-primary)]'>
 								<IconUsers size={14} />
 								<span>{totalPopulation}</span>
 							</div>
 							<button
 								onClick={() => onOpenChange(false)}
-								className='p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors'
+								className='p-1 hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-white'
 							>
 								<IconX size={16} />
 							</button>
@@ -183,25 +183,25 @@ export function UpgradesModal({
 				</DialogHeader>
 
 				{/* Tabs */}
-				<div className='flex gap-2 border-b border-zinc-800 pb-2'>
+				<div className='flex gap-2 border-b border-[var(--border-default)] pb-2'>
 					<button
 						onClick={() => setActiveTab('my')}
-						className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-							activeTab === 'my' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
+						className={`px-3 py-1.5 text-xs font-medium ${
+							activeTab === 'my' ? 'bg-[var(--bg-surface)] text-white' : 'text-[var(--text-muted)] hover:text-white'
 						}`}
 					>
 						My Upgrades
 					</button>
 					<button
 						onClick={() => setActiveTab('enemy')}
-						className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${
-							activeTab === 'enemy' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
+						className={`px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 ${
+							activeTab === 'enemy' ? 'bg-[var(--bg-surface)] text-white' : 'text-[var(--text-muted)] hover:text-white'
 						}`}
 					>
 						<IconEye size={12} />
 						Enemy Intel
 						{hasEnemyIntel && (
-							<span className='bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded-full'>
+							<span className='bg-red-600 text-white text-[10px] px-1.5 py-0.5 '>
 								{knownEnemyUpgrades?.reduce((sum, e) => sum + e.upgrades.length, 0)}
 							</span>
 						)}
@@ -210,7 +210,7 @@ export function UpgradesModal({
 
 				{/* Error message */}
 				{error && (
-					<div className='px-3 py-2 rounded bg-red-900/30 border border-red-800/50'>
+					<div className='px-3 py-2 bg-red-900/30 border border-red-800/50'>
 						<p className='text-xs text-red-400'>{error}</p>
 					</div>
 				)}
@@ -227,7 +227,7 @@ export function UpgradesModal({
 							return (
 								<div key={category} className='space-y-2'>
 									{/* Category header */}
-									<div className='flex items-center gap-2 text-sm text-zinc-300'>
+									<div className='flex items-center gap-2 text-sm text-[var(--text-primary)]'>
 										{CATEGORY_ICONS[category]}
 										<span className='font-medium'>{CATEGORY_LABELS[category]}</span>
 									</div>
@@ -249,7 +249,7 @@ export function UpgradesModal({
 												{/* Arrow to tier 2 */}
 												{branch.tier2 && (
 													<>
-														<IconArrowRight size={16} className='text-zinc-600 shrink-0' />
+														<IconArrowRight size={16} className='text-[var(--text-faint)] shrink-0' />
 														<UpgradeNode
 															upgrade={branch.tier2}
 															status={getUpgradeStatus(branch.tier2)}
@@ -274,9 +274,9 @@ export function UpgradesModal({
 					<div className='space-y-4'>
 						{!hasEnemyIntel ? (
 							<div className='text-center py-8'>
-								<IconEye size={32} className='mx-auto text-zinc-600 mb-2' />
-								<p className='text-zinc-400 text-sm'>No enemy upgrades discovered yet</p>
-								<p className='text-zinc-500 text-xs mt-1'>
+								<IconEye size={32} className='mx-auto text-[var(--text-faint)] mb-2' />
+								<p className='text-[var(--text-muted)] text-sm'>No enemy upgrades discovered yet</p>
+								<p className='text-[var(--text-faint)] text-xs mt-1'>
 									Upgrades are revealed through combat or spy intel at enemy capitals (9 min)
 								</p>
 							</div>
@@ -287,9 +287,9 @@ export function UpgradesModal({
 									<div key={enemyData.enemyPlayerId} className='space-y-2'>
 										{/* Enemy header */}
 										<div className='flex items-center gap-2'>
-											<div className='w-3 h-3 rounded-full' style={{ backgroundColor: enemy?.color ?? '#666' }} />
+											<div className='w-3 h-3 ' style={{ backgroundColor: enemy?.color ?? '#666' }} />
 											<span className='text-sm font-medium text-white'>{enemy?.username ?? 'Unknown'}</span>
-											<span className='text-xs text-zinc-500'>
+											<span className='text-xs text-[var(--text-faint)]'>
 												({enemyData.upgrades.length} upgrade{enemyData.upgrades.length !== 1 ? 's' : ''})
 											</span>
 										</div>
@@ -302,11 +302,11 @@ export function UpgradesModal({
 													return null;
 												}
 												return (
-													<div key={known.upgradeId} className='rounded border border-zinc-700 bg-zinc-800/50 p-2'>
+													<div key={known.upgradeId} className='border border-[var(--border-default)] bg-[var(--bg-surface)]/50 p-2'>
 														<div className='flex items-start justify-between gap-2'>
 															<div className='flex-1'>
-																<p className='text-xs font-medium text-zinc-200'>{upgrade.name}</p>
-																<p className='text-[10px] text-zinc-400 mt-0.5'>{upgrade.description}</p>
+																<p className='text-xs font-medium text-[var(--text-primary)]'>{upgrade.name}</p>
+																<p className='text-[10px] text-[var(--text-muted)] mt-0.5'>{upgrade.description}</p>
 															</div>
 															<div className='shrink-0'>
 																{known.revealSource === 'combat' ? (
@@ -347,39 +347,39 @@ function UpgradeNode({ upgrade, status, canAfford, missingRequirement, isPurchas
 
 	return (
 		<div
-			className={`relative flex-1 min-w-[140px] max-w-[200px] rounded-lg border p-2 transition-colors ${
+			className={`relative flex-1 min-w-[140px] max-w-[200px] border p-2 ${
 				isPurchased
 					? 'border-green-700 bg-green-900/40'
 					: isLocked
-						? 'border-zinc-600 bg-zinc-800 opacity-60'
+						? 'border-[var(--border-default)] bg-[var(--bg-surface)] opacity-60'
 						: canAfford
-							? 'border-amber-600 bg-zinc-800 hover:border-amber-500'
-							: 'border-zinc-600 bg-zinc-800'
+							? 'border-[var(--accent)] bg-[var(--bg-surface)] hover:border-[var(--accent-hover)]'
+							: 'border-[var(--border-default)] bg-[var(--bg-surface)]'
 			}`}
 		>
 			{/* Status icon */}
 			<div className='absolute -top-1.5 -right-1.5'>
 				{isPurchased && (
-					<div className='rounded-full bg-green-600 p-0.5'>
+					<div className=' bg-green-600 p-0.5'>
 						<IconCheck size={10} className='text-white' />
 					</div>
 				)}
 				{isLocked && (
-					<div className='rounded-full bg-zinc-600 p-0.5'>
-						<IconLock size={10} className='text-zinc-400' />
+					<div className=' bg-[var(--bg-raised)] p-0.5'>
+						<IconLock size={10} className='text-[var(--text-muted)]' />
 					</div>
 				)}
 			</div>
 
 			{/* Content */}
 			<div className='space-y-1'>
-				<p className={`text-xs font-medium leading-tight ${isPurchased ? 'text-green-400' : isLocked ? 'text-zinc-400' : 'text-white'}`}>
+				<p className={`text-xs font-medium leading-tight ${isPurchased ? 'text-green-400' : isLocked ? 'text-[var(--text-muted)]' : 'text-white'}`}>
 					{upgrade.name}
 				</p>
-				<p className={`text-[10px] leading-tight ${isLocked ? 'text-zinc-500' : 'text-zinc-300'}`}>{upgrade.description}</p>
+				<p className={`text-[10px] leading-tight ${isLocked ? 'text-[var(--text-faint)]' : 'text-[var(--text-primary)]'}`}>{upgrade.description}</p>
 
 				{/* Requirement warning */}
-				{isLocked && missingRequirement && <p className='text-[10px] text-amber-500/80 leading-tight'>{missingRequirement}</p>}
+				{isLocked && missingRequirement && <p className='text-[10px] text-[var(--accent)]/80 leading-tight'>{missingRequirement}</p>}
 
 				{/* Purchase button / Cost */}
 				{!isPurchased && (
@@ -388,8 +388,8 @@ function UpgradeNode({ upgrade, status, canAfford, missingRequirement, isPurchas
 							<button
 								onClick={onPurchase}
 								disabled={!canAfford || isPurchasing}
-								className={`w-full px-2 py-1 rounded text-[10px] font-medium flex items-center justify-center gap-1 transition-colors ${
-									canAfford ? 'bg-amber-600 text-white hover:bg-amber-500' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+								className={`w-full px-2 py-1 text-[10px] font-medium flex items-center justify-center gap-1 ${
+									canAfford ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent)]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-not-allowed'
 								}`}
 							>
 								{isPurchasing ? (
@@ -402,7 +402,7 @@ function UpgradeNode({ upgrade, status, canAfford, missingRequirement, isPurchas
 								)}
 							</button>
 						) : (
-							<div className='text-[10px] text-zinc-500 flex items-center justify-center gap-1'>
+							<div className='text-[10px] text-[var(--text-faint)] flex items-center justify-center gap-1'>
 								<IconCoins size={10} />
 								<span>{upgrade.goldCost}g</span>
 							</div>

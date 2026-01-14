@@ -32,6 +32,7 @@ export async function initializeCityAllegiance(
 			tileId,
 			teamId: player._id,
 			score,
+			lastUpdateTime: Date.now(),
 		});
 	}
 }

@@ -111,20 +111,20 @@ export function UpgradesPanel({ gameId, playerGold, totalPopulation, isCapitalMo
 	};
 
 	return (
-		<div className='rounded-lg border border-zinc-800 bg-zinc-900 overflow-hidden max-h-[500px] flex flex-col'>
+		<div className='border border-[var(--border-default)] bg-[var(--bg-base)] overflow-hidden max-h-[500px] flex flex-col'>
 			{/* Header */}
-			<div className='flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-800/50'>
-				<h3 className='text-sm font-medium text-white'>Upgrades</h3>
+			<div className='flex items-center justify-between px-3 py-2 border-b border-[var(--border-default)] bg-[var(--bg-surface)]/50'>
+				<h3 className='text-sm font-medium text-white uppercase'>Upgrades</h3>
 				<div className='flex items-center gap-3'>
-					<div className='flex items-center gap-1 text-xs text-zinc-400'>
-						<IconCoins size={12} className='text-yellow-500' />
-						<span>{Math.floor(playerGold)}</span>
+					<div className='flex items-center gap-1 text-xs text-[var(--text-muted)]'>
+						<IconCoins size={12} className='text-[var(--accent)]' />
+						<span className='tabular-nums'>{Math.floor(playerGold)}</span>
 					</div>
-					<div className='flex items-center gap-1 text-xs text-zinc-400'>
+					<div className='flex items-center gap-1 text-xs text-[var(--text-muted)]'>
 						<IconUsers size={12} />
-						<span>{totalPopulation}</span>
+						<span className='tabular-nums'>{totalPopulation}</span>
 					</div>
-					<button onClick={onClose} className='text-zinc-400 hover:text-white text-xs'>
+					<button onClick={onClose} className='text-[var(--text-muted)] hover:text-white text-xs'>
 						Close
 					</button>
 				</div>
@@ -147,7 +147,7 @@ export function UpgradesPanel({ gameId, playerGold, totalPopulation, isCapitalMo
 
 					return (
 						<div key={category} className='space-y-1.5'>
-							<div className='flex items-center gap-1.5 text-xs text-zinc-400 px-1'>
+							<div className='flex items-center gap-1.5 text-xs text-[var(--text-muted)] px-1 uppercase'>
 								{CATEGORY_ICONS[category]}
 								<span>{CATEGORY_LABELS[category]}</span>
 							</div>
@@ -188,27 +188,27 @@ function UpgradeCard({ upgrade, status, canAfford, missingRequirement, isPurchas
 
 	return (
 		<div
-			className={`rounded border px-2 py-1.5 ${
+			className={`border px-2 py-1.5 ${
 				isPurchased
 					? 'border-green-800/50 bg-green-900/20'
 					: isLocked
-						? 'border-zinc-700/50 bg-zinc-800/30 opacity-60'
-						: 'border-zinc-700 bg-zinc-800/50'
+						? 'border-[var(--border-default)]/50 bg-[var(--bg-surface)]/30 opacity-60'
+						: 'border-[var(--border-default)] bg-[var(--bg-surface)]/50'
 			}`}
 		>
 			<div className='flex items-start justify-between gap-2'>
 				<div className='flex-1 min-w-0'>
 					<div className='flex items-center gap-1.5'>
 						{isPurchased && <IconCheck size={12} className='text-green-500 shrink-0' />}
-						{isLocked && <IconLock size={12} className='text-zinc-500 shrink-0' />}
+						{isLocked && <IconLock size={12} className='text-[var(--text-faint)] shrink-0' />}
 						<span
-							className={`text-xs font-medium truncate ${isPurchased ? 'text-green-400' : isLocked ? 'text-zinc-500' : 'text-white'}`}
+							className={`text-xs font-medium truncate ${isPurchased ? 'text-green-400' : isLocked ? 'text-[var(--text-faint)]' : 'text-white'}`}
 						>
 							{upgrade.name}
 						</span>
 					</div>
-					<p className={`text-[10px] mt-0.5 ${isLocked ? 'text-zinc-600' : 'text-zinc-400'}`}>{upgrade.description}</p>
-					{isLocked && missingRequirement && <p className='text-[10px] text-amber-500/70 mt-0.5'>{missingRequirement}</p>}
+					<p className={`text-[10px] mt-0.5 ${isLocked ? 'text-[var(--text-faint)]' : 'text-[var(--text-muted)]'}`}>{upgrade.description}</p>
+					{isLocked && missingRequirement && <p className='text-[10px] text-[var(--accent)]/70 mt-0.5 tabular-nums'>{missingRequirement}</p>}
 				</div>
 
 				{/* Cost / Purchase button */}
@@ -218,8 +218,8 @@ function UpgradeCard({ upgrade, status, canAfford, missingRequirement, isPurchas
 							<button
 								onClick={onPurchase}
 								disabled={!canAfford || isPurchasing}
-								className={`px-2 py-1 rounded text-[10px] font-medium flex items-center gap-1 ${
-									canAfford ? 'bg-amber-600 text-white hover:bg-amber-700' : 'bg-zinc-700 text-zinc-400 cursor-not-allowed'
+								className={`px-2 py-1 text-[10px] font-medium flex items-center gap-1 ${
+									canAfford ? 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]' : 'bg-[var(--bg-raised)] text-[var(--text-muted)] cursor-not-allowed'
 								}`}
 							>
 								{isPurchasing ? (
@@ -227,14 +227,14 @@ function UpgradeCard({ upgrade, status, canAfford, missingRequirement, isPurchas
 								) : (
 									<>
 										<IconCoins size={10} />
-										<span>{upgrade.goldCost}</span>
+										<span className='tabular-nums'>{upgrade.goldCost}</span>
 									</>
 								)}
 							</button>
 						) : (
-							<div className='px-2 py-1 text-[10px] text-zinc-500 flex items-center gap-1'>
+							<div className='px-2 py-1 text-[10px] text-[var(--text-faint)] flex items-center gap-1'>
 								<IconCoins size={10} />
-								<span>{upgrade.goldCost}</span>
+								<span className='tabular-nums'>{upgrade.goldCost}</span>
 							</div>
 						)}
 					</div>

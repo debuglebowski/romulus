@@ -131,21 +131,9 @@
     "biome",
     "bun",
     "bunx",
-    "composer",
-    "ipython",
-    "jupyter",
     "node",
-    "notebook",
     "npm",
     "npx",
-    "pdb",
-    "php",
-    "pip",
-    "pip3",
-    "pipx",
-    "pudb",
-    "python",
-    "python3",
     "react-scripts",
     "ts-node",
     "tsc",
@@ -161,10 +149,8 @@
   "custom_commands": [],
   "detected_stack": {
     "languages": [
-      "python",
       "javascript",
-      "typescript",
-      "php"
+      "typescript"
     ],
     "package_managers": [
       "npm",
@@ -194,7 +180,7 @@
     "cargo_aliases": [],
     "shell_scripts": []
   },
-  "project_dir": "/Users/Kalle/dev/projects/romulus",
-  "created_at": "2026-01-14T00:34:03.387164",
-  "project_hash": "093cdb973d846ac475ad0810e4a9f1a4"
+  "project_dir": "/Users/Kalle/dev/projects/romulus/.auto-claude/worktrees/tasks/004-redesign-ui",
+  "created_at": "2026-01-14T08:37:16.953293",
+  "project_hash": "a767cee6a0c78e89f692c75cf6e01a00"
 }

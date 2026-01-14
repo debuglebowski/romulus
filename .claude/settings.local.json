@@ -17,7 +17,14 @@
       "Bash(npx convex dev:*)",
       "mcp__convex__data",
       "mcp__convex__run",
-      "mcp__convex__runOneoffQuery"
+      "mcp__convex__runOneoffQuery",
+      "Bash(ls:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run:*)",
+      "Bash(npx vitest:*)",
+      "Bash(awk:*)",
+      "Bash(bun test:*)",
+      "Bash(bun run test:types:*)"
     ]
   }
 }

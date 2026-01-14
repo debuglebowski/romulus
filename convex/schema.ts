@@ -207,7 +207,20 @@ const schema = defineSchema({
 		targetPlayerId: v.id('gamePlayers'),
 		startedAt: v.number(),
 		currentTier: v.number(),
+		lastUpdateTime: v.number(),
+		accumulatedTime: v.number(),
 	}).index('by_spyOwnerId', ['spyOwnerId']),
+
+	cityAllegiance: defineTable({
+		gameId: v.id('games'),
+		tileId: v.id('tiles'),
+		teamId: v.id('gamePlayers'),
+		score: v.number(),
+		lastUpdateTime: v.optional(v.number()),
+	})
+		.index('by_gameId', ['gameId'])
+		.index('by_tileId', ['tileId'])
+		.index('by_tileId_teamId', ['tileId', 'teamId']),
 });
 
 export default schema;

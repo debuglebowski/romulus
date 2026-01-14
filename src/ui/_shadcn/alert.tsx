@@ -3,11 +3,13 @@ import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/ui/_shadcn.lib/utils"
 
-const alertVariants = cva("grid gap-0.5 rounded-lg border px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4 w-full relative group/alert", {
+const alertVariants = cva("grid gap-0.5 border-l-2 px-2.5 py-2 text-left text-sm has-data-[slot=alert-action]:relative has-data-[slot=alert-action]:pr-18 has-[>svg]:grid-cols-[auto_1fr] has-[>svg]:gap-x-2 *:[svg]:row-span-2 *:[svg]:translate-y-0.5 *:[svg]:text-current *:[svg:not([class*='size-'])]:size-4 w-full relative group/alert", {
   variants: {
     variant: {
-      default: "bg-card text-card-foreground",
-      destructive: "text-destructive bg-card *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+      default: "bg-[var(--info-bg)] border-l-[var(--info)] text-[var(--info-text)] *:data-[slot=alert-description]:text-[var(--info-text)]",
+      destructive: "bg-[var(--danger-bg)] border-l-[var(--danger)] text-[var(--danger-text)] *:data-[slot=alert-description]:text-[var(--danger-text)] *:[svg]:text-current",
+      success: "bg-[var(--success-bg)] border-l-[var(--success)] text-[var(--success-text)] *:data-[slot=alert-description]:text-[var(--success-text)] *:[svg]:text-current",
+      info: "bg-[var(--info-bg)] border-l-[var(--info)] text-[var(--info-text)] *:data-[slot=alert-description]:text-[var(--info-text)] *:[svg]:text-current",
     },
   },
   defaultVariants: {

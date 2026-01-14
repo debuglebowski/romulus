@@ -37,7 +37,7 @@ export function AuthForm() {
 	}
 
 	return (
-		<div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-primary/5 p-4">
+		<div className="flex min-h-screen items-center justify-center bg-black p-4">
 			<Card className="w-full max-w-md">
 				<CardHeader className="text-center">
 					<CardTitle className="text-2xl">Welcome</CardTitle>
@@ -64,7 +64,7 @@ export function AuthForm() {
 							<form onSubmit={handleSubmit}>
 								<FieldGroup>
 									<Field>
-										<FieldLabel htmlFor="signin-email">
+										<FieldLabel htmlFor="signin-email" className="uppercase">
 											<IconMail className="size-4" />
 											Email
 										</FieldLabel>
@@ -79,7 +79,7 @@ export function AuthForm() {
 										/>
 									</Field>
 									<Field>
-										<FieldLabel htmlFor="signin-password">
+										<FieldLabel htmlFor="signin-password" className="uppercase">
 											<IconLock className="size-4" />
 											Password
 										</FieldLabel>
@@ -112,7 +112,7 @@ export function AuthForm() {
 							<form onSubmit={handleSubmit}>
 								<FieldGroup>
 									<Field>
-										<FieldLabel htmlFor="signup-email">
+										<FieldLabel htmlFor="signup-email" className="uppercase">
 											<IconMail className="size-4" />
 											Email
 										</FieldLabel>
@@ -127,7 +127,7 @@ export function AuthForm() {
 										/>
 									</Field>
 									<Field>
-										<FieldLabel htmlFor="signup-password">
+										<FieldLabel htmlFor="signup-password" className="uppercase">
 											<IconLock className="size-4" />
 											Password
 										</FieldLabel>

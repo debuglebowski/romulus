@@ -23,27 +23,23 @@ export function TutorialStep({ illustration, children, className, isAnimating = 
 		<div
 			className={cn(
 				'space-y-4',
-				// Apply subtle fade-in animation when step mounts
-				!isAnimating && 'animate-in fade-in-0 duration-300',
 				className
 			)}
 		>
 			{illustration && (
 				<div
 					className={cn(
-						'flex justify-center',
-						!isAnimating && 'animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-75'
+						'flex justify-center'
 					)}
 				>
-					<div className='rounded-lg bg-muted/50 p-4 transition-all duration-200 hover:bg-muted/70'>
+					<div className='bg-muted/50 p-4 hover:bg-muted/70 border border-border'>
 						{illustration}
 					</div>
 				</div>
 			)}
 			<div
 				className={cn(
-					'space-y-4',
-					!isAnimating && 'animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150'
+					'space-y-4'
 				)}
 			>
 				{children}
@@ -68,9 +64,9 @@ type TutorialSectionProps = {
  */
 export function TutorialSection({ title, children, className }: TutorialSectionProps) {
 	return (
-		<div className={cn('transition-colors duration-200', className)}>
+		<div className={cn(className)}>
 			<h3 className='mb-2 font-semibold uppercase tracking-wide'>{title}</h3>
-			<div className='mb-3 border-b border-muted transition-colors duration-200' />
+			<div className='mb-3 border-b border-muted' />
 			<div className='space-y-2 text-muted-foreground'>{children}</div>
 		</div>
 	);
@@ -93,7 +89,7 @@ export function TutorialList({ items, className }: TutorialListProps) {
 			{items.map((item, i) => (
 				<li
 					key={i}
-					className='rounded px-1 transition-colors duration-150 hover:bg-muted/50'
+					className='px-1 hover:bg-muted/50'
 				>
 					• {item}
 				</li>
@@ -117,9 +113,9 @@ export function TutorialHighlight({ children, className }: TutorialHighlightProp
 	return (
 		<div
 			className={cn(
-				'rounded-md bg-primary/10 p-3 text-center font-medium text-primary',
-				'ring-1 ring-primary/20 transition-all duration-200',
-				'hover:bg-primary/15 hover:ring-primary/30',
+				'bg-primary/10 p-3 text-center font-medium text-primary',
+				'border border-primary/20',
+				'hover:bg-primary/15 hover:border-primary/30',
 				className
 			)}
 		>

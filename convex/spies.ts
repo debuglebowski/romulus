@@ -3,11 +3,10 @@ import { v } from 'convex/values';
 import { mutation, query } from './_generated/server';
 import { auth } from './auth';
 import { coordKey, findPath } from './lib/hex';
-import { getUpgradeModifiers } from './upgrades';
+import { TRAVEL_TIME_PER_HEX } from './lib/spyMovement';
+import { CAPITAL_INTEL_TIER_TIME, CAPITAL_INTEL_MAX_TIER } from './lib/economy';
 
 import type { Id } from './_generated/dataModel';
-
-const TRAVEL_TIME_PER_HEX = 10000; // 10 seconds per hex (same as military)
 
 export const getVisibleForPlayer = query({
 	args: { gameId: v.id('games') },
@@ -134,18 +133,8 @@ export const moveSpy = mutation({
 			throw new Error('No valid path to target');
 		}
 
-		// Fetch player's upgrades to apply spy speed bonus
-		const playerUpgrades = await ctx.db
-			.query('playerUpgrades')
-			.withIndex('by_playerId', (q) => q.eq('playerId', spy.ownerId))
-			.collect();
-
-		const modifiers = getUpgradeModifiers(playerUpgrades.map((u) => u.upgradeId));
-		const speedMultiplier = 1 - (modifiers.spySpeedBonus ?? 0); // Bonus reduces travel time
-
 		const now = Date.now();
-		const baseTravelTime = path.length * TRAVEL_TIME_PER_HEX;
-		const travelTime = Math.round(baseTravelTime * speedMultiplier);
+		const travelTime = path.length * TRAVEL_TIME_PER_HEX;
 
 		await ctx.db.patch(spyId, {
 			targetTileId,
@@ -326,81 +315,7 @@ export const getSpiesOnTile = query({
 	},
 });
 
-// Get allegiance breakdown for a tile if player has a spy there
-export const getAllegianceForTile = query({
-	args: {
-		gameId: v.id('games'),
-		tileId: v.id('tiles'),
-	},
-	handler: async (ctx, { gameId, tileId }) => {
-		const userId = await auth.getUserId(ctx);
-		if (!userId) {
-			return null;
-		}
-
-		const player = await ctx.db
-			.query('gamePlayers')
-			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
-			.filter((q) => q.eq(q.field('userId'), userId))
-			.first();
-
-		if (!player) {
-			return null;
-		}
-
-		// Check if player has a stationary spy on this tile
-		const playerSpies = await ctx.db
-			.query('spies')
-			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
-			.collect();
-
-		const spyOnTile = playerSpies.find((s) => s.tileId === tileId && !s.targetTileId);
-		if (!spyOnTile) {
-			return null;
-		}
-
-		// Get tile info
-		const tile = await ctx.db.get(tileId);
-		if (!tile || (tile.type !== 'city' && tile.type !== 'capital')) {
-			return null;
-		}
-
-		// If it's our own tile, show allegiance anyway (for monitoring loyalty)
-		// Get all allegiance records for this tile
-		const allegianceRecords = await ctx.db
-			.query('cityAllegiance')
-			.withIndex('by_tileId', (q) => q.eq('tileId', tileId))
-			.collect();
-
-		// Get all players to map IDs to colors
-		const allPlayers = await ctx.db
-			.query('gamePlayers')
-			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
-			.collect();
-
-		const playerMap = new Map(allPlayers.map((p) => [p._id, p]));
-
-		// Build allegiance breakdown
-		const breakdown = allegianceRecords.map((a) => {
-			const teamPlayer = playerMap.get(a.teamId);
-			return {
-				teamId: a.teamId,
-				score: a.score,
-				color: teamPlayer?.color ?? '#888888',
-				isOwner: a.teamId === tile.ownerId,
-				isMe: a.teamId === player._id,
-			};
-		}).sort((a, b) => b.score - a.score);
-
-		return {
-			tileOwnerId: tile.ownerId,
-			tileType: tile.type,
-			breakdown,
-		};
-	},
-});
-
-// Get capital intel progress for all enemy players
+// Get capital intel for enemy capitals the player is spying on
 export const getCapitalIntel = query({
 	args: { gameId: v.id('games') },
 	handler: async (ctx, { gameId }) => {
@@ -425,72 +340,107 @@ export const getCapitalIntel = query({
 			.withIndex('by_spyOwnerId', (q) => q.eq('spyOwnerId', player._id))
 			.collect();
 
-		// Get all players to get their economy data for intel display
-		const allPlayers = await ctx.db
-			.query('gamePlayers')
+		if (intelProgress.length === 0) {
+			return [];
+		}
+
+		// Get all tiles to find capitals
+		const allTiles = await ctx.db
+			.query('tiles')
 			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
 			.collect();
 
-		const playerMap = new Map(allPlayers.map((p) => [p._id, p]));
-
-		// Get known enemy upgrades for this player
-		const knownUpgrades = await ctx.db
-			.query('knownEnemyUpgrades')
-			.withIndex('by_playerId', (q) => q.eq('playerId', player._id))
+		// Get player's spies
+		const playerSpies = await ctx.db
+			.query('spies')
+			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
 			.collect();
 
-		// Build intel map: enemyPlayerId -> Set<upgradeId>
-		const knownUpgradesByEnemy = new Map<string, Set<string>>();
-		for (const known of knownUpgrades) {
-			const upgradeSet = knownUpgradesByEnemy.get(known.enemyPlayerId) ?? new Set();
-			upgradeSet.add(known.upgradeId);
-			knownUpgradesByEnemy.set(known.enemyPlayerId, upgradeSet);
-		}
+		const results = [];
 
-		const now = Date.now();
-		const INTEL_TIER_DURATION_MS = 3 * 60 * 1000; // 3 minutes per tier
-
-		// Build intel results
-		return intelProgress.map((progress) => {
-			const targetPlayer = playerMap.get(progress.targetPlayerId);
+		for (const progress of intelProgress) {
+			// Find target player
+			const targetPlayer = await ctx.db.get(progress.targetPlayerId);
 			if (!targetPlayer) {
-				return null;
+				continue;
 			}
 
-			// Calculate current tier based on time elapsed
-			const timeElapsed = now - progress.startedAt;
-			const currentTier = Math.min(5, Math.floor(timeElapsed / INTEL_TIER_DURATION_MS));
-			const nextTierTime = (currentTier + 1) * INTEL_TIER_DURATION_MS - timeElapsed;
+			// Find target player's capital
+			const targetCapital = allTiles.find(
+				(t) => t.type === 'capital' && t.ownerId === progress.targetPlayerId,
+			);
 
-			// Intel tiers: 0=nothing, 1=gold, 2=pop, 3=upgrades, 4=armies, 5=spies
-			const knownUpgradeIds = [...(knownUpgradesByEnemy.get(progress.targetPlayerId) ?? [])];
+			// Count active spies at the capital (stationary, not moving, not revealed)
+			const spiesAtCapital = targetCapital
+				? playerSpies.filter(
+					(s) => s.tileId === targetCapital._id && !s.targetTileId && !s.isRevealed,
+				)
+				: [];
 
-			return {
+			const spyCount = spiesAtCapital.length;
+
+			// Calculate current tier from accumulated time
+			const currentTier = Math.min(
+				Math.floor(progress.accumulatedTime / CAPITAL_INTEL_TIER_TIME),
+				CAPITAL_INTEL_MAX_TIER,
+			);
+
+			// Only show intel if we have progress (tier > 0) or spies currently present
+			if (currentTier === 0 && spyCount === 0) {
+				continue;
+			}
+
+			// Calculate next tier time
+			let nextTierTime: number | null = null;
+			if (spyCount > 0 && currentTier < CAPITAL_INTEL_MAX_TIER) {
+				const nextTierThreshold = (currentTier + 1) * CAPITAL_INTEL_TIER_TIME;
+				const remainingTime = nextTierThreshold - progress.accumulatedTime;
+				nextTierTime = remainingTime / spyCount; // ms until next tier
+			}
+
+			// Fetch data based on tier
+			let gold: number | null = null;
+			let population: number | null = null;
+			let upgrades: string[] | null = null;
+
+			if (currentTier >= 1) {
+				gold = targetPlayer.gold ?? 0;
+			}
+
+			if (currentTier >= 2) {
+				population = targetPlayer.population ?? 0;
+			}
+
+			if (currentTier >= 3) {
+				const targetUpgrades = await ctx.db
+					.query('playerUpgrades')
+					.withIndex('by_playerId', (q) => q.eq('playerId', progress.targetPlayerId))
+					.collect();
+				upgrades = targetUpgrades.map((u) => u.upgradeId);
+			}
+
+			results.push({
 				targetPlayerId: progress.targetPlayerId,
 				targetColor: targetPlayer.color,
 				currentTier,
-				nextTierTime: currentTier < 5 ? nextTierTime : null,
-				// Tier 1+: Gold
-				gold: currentTier >= 1 ? targetPlayer.gold ?? 0 : null,
-				// Tier 2+: Population
-				population: currentTier >= 2 ? targetPlayer.population ?? 0 : null,
-				// Tier 3+: Upgrades (revealed via knownEnemyUpgrades)
-				upgrades: currentTier >= 3 ? knownUpgradeIds : null,
-				// Tier 4+: Army counts (need to query)
-				// Tier 5+: Spy counts (need to query)
-				// We'll compute these if needed
-			};
-		}).filter((r) => r !== null);
+				nextTierTime,
+				gold,
+				population,
+				upgrades,
+			});
+		}
+
+		return results;
 	},
 });
 
-// Get full capital intel details for a specific enemy player
-export const getCapitalIntelDetails = query({
+// Get allegiance data for a tile if player has spy there
+export const getAllegianceForTile = query({
 	args: {
 		gameId: v.id('games'),
-		targetPlayerId: v.id('gamePlayers'),
+		tileId: v.id('tiles'),
 	},
-	handler: async (ctx, { gameId, targetPlayerId }) => {
+	handler: async (ctx, { gameId, tileId }) => {
 		const userId = await auth.getUserId(ctx);
 		if (!userId) {
 			return null;
@@ -506,74 +456,52 @@ export const getCapitalIntelDetails = query({
 			return null;
 		}
 
-		// Get intel progress for this specific target
-		const progress = await ctx.db
-			.query('capitalIntelProgress')
-			.withIndex('by_spyOwnerId_targetPlayerId', (q) => q.eq('spyOwnerId', player._id).eq('targetPlayerId', targetPlayerId))
+		// Verify player has spy on tile
+		const spyOnTile = await ctx.db
+			.query('spies')
+			.withIndex('by_ownerId', (q) => q.eq('ownerId', player._id))
+			.filter((q) => q.eq(q.field('tileId'), tileId))
+			.filter((q) => q.eq(q.field('targetTileId'), undefined))
 			.first();
 
-		if (!progress) {
+		if (!spyOnTile) {
 			return null;
 		}
 
-		const targetPlayer = await ctx.db.get(targetPlayerId);
-		if (!targetPlayer) {
+		const tile = await ctx.db.get(tileId);
+		if (!tile || tile.type !== 'city') {
 			return null;
 		}
 
-		const now = Date.now();
-		const INTEL_TIER_DURATION_MS = 3 * 60 * 1000;
-		const timeElapsed = now - progress.startedAt;
-		const currentTier = Math.min(5, Math.floor(timeElapsed / INTEL_TIER_DURATION_MS));
-
-		// Get known upgrades
-		const knownUpgrades = await ctx.db
-			.query('knownEnemyUpgrades')
-			.withIndex('by_playerId_enemyPlayerId', (q) => q.eq('playerId', player._id).eq('enemyPlayerId', targetPlayerId))
+		// Get allegiance records
+		const allegiances = await ctx.db
+			.query('cityAllegiance')
+			.withIndex('by_tileId', (q) => q.eq('tileId', tileId))
 			.collect();
 
-		// For tier 4+: Get army count
-		let armyCount = null;
-		let totalUnits = null;
-		if (currentTier >= 4) {
-			const armies = await ctx.db
-				.query('armies')
-				.withIndex('by_ownerId', (q) => q.eq('ownerId', targetPlayerId))
-				.collect();
+		// Get player colors
+		const allPlayers = await ctx.db
+			.query('gamePlayers')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.collect();
 
-			armyCount = armies.length;
+		const playerMap = new Map(allPlayers.map((p) => [p._id, p]));
 
-			const units = await ctx.db
-				.query('units')
-				.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
-				.collect();
-
-			const armyIds = new Set(armies.map((a) => a._id));
-			totalUnits = units.filter((u) => armyIds.has(u.armyId)).length;
-		}
-
-		// For tier 5: Get spy count
-		let spyCount = null;
-		if (currentTier >= 5) {
-			const spies = await ctx.db
-				.query('spies')
-				.withIndex('by_ownerId', (q) => q.eq('ownerId', targetPlayerId))
-				.collect();
-
-			spyCount = spies.length;
-		}
+		const breakdown = allegiances.map((a) => {
+			const teamPlayer = playerMap.get(a.teamId);
+			return {
+				teamId: a.teamId,
+				score: a.score,
+				color: teamPlayer?.color ?? '#888',
+				isOwner: tile.ownerId === a.teamId,
+				isMe: a.teamId === player._id,
+			};
+		});
 
 		return {
-			targetPlayerId,
-			targetColor: targetPlayer.color,
-			currentTier,
-			startedAt: progress.startedAt,
-			gold: currentTier >= 1 ? targetPlayer.gold ?? 0 : null,
-			population: currentTier >= 2 ? targetPlayer.population ?? 0 : null,
-			upgrades: currentTier >= 3 ? knownUpgrades.map((u) => u.upgradeId) : null,
-			armyCount,
-			totalUnits,
-			spyCount,
+			tileOwnerId: tile.ownerId,
+			tileType: tile.type as 'city' | 'capital',
+			breakdown,
 		};
 	},
 });

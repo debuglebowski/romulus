@@ -12,7 +12,7 @@ export function EconomyStep() {
 			illustration={
 				<div className='flex items-center gap-3'>
 					<IconHammer className='h-8 w-8 text-muted-foreground' />
-					<IconCoins className='h-10 w-10 text-amber-400' />
+					<IconCoins className='h-10 w-10 text-[var(--accent)]' />
 					<IconUsers className='h-8 w-8 text-muted-foreground' />
 				</div>
 			}

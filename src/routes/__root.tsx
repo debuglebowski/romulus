@@ -90,7 +90,7 @@ function RootLayout() {
 	if (isLoading) {
 		return (
 			<div className='flex min-h-screen items-center justify-center'>
-				<div className='animate-pulse text-muted-foreground'>Loading...</div>
+				<div className='text-muted-foreground'>Loading...</div>
 			</div>
 		);
 	}
@@ -110,7 +110,7 @@ function RootLayout() {
 					{/* Home button */}
 					<Link
 						to='/lobbies'
-						className='flex h-8 w-8 items-center justify-center rounded-full border-2 border-primary bg-background text-primary shadow-[0_0_0_1px_var(--background),0_0_0_3px_var(--primary)] hover:shadow-[0_0_12px_var(--primary)] transition-shadow'
+						className='flex h-8 w-8 items-center justify-center border-2 border-primary bg-background text-primary hover:bg-primary hover:text-primary-foreground'
 					>
 						<IconHome size={16} />
 					</Link>
@@ -118,8 +118,8 @@ function RootLayout() {
 					{/* User coin */}
 					<DropdownMenu>
 						<DropdownMenuTrigger className='cursor-pointer outline-none'>
-							<Avatar className='h-8 w-8 border-2 border-primary shadow-[0_0_0_1px_var(--background),0_0_0_3px_var(--primary)] hover:shadow-[0_0_12px_var(--primary)] transition-shadow'>
-								<AvatarFallback className='bg-background text-primary font-semibold'>
+							<Avatar className='h-8 w-8 border-2 border-primary hover:border-[color:var(--accent-hover)]'>
+								<AvatarFallback className='bg-background text-primary font-semibold uppercase tracking-wider'>
 									{initials}
 								</AvatarFallback>
 							</Avatar>

@@ -42,42 +42,42 @@ export function RatioSliders({ labourRatio, militaryRatio, spyRatio, population,
 	};
 
 	return (
-		<div className='rounded-lg border border-zinc-800 bg-zinc-900 p-3 space-y-2'>
+		<div className=' border border-[var(--border-default)] bg-[var(--bg-base)] p-3 space-y-2'>
 			<SliderRow
 				icon={<IconHammer className='h-3.5 w-3.5' />}
-				label='Labour'
+				label='LABOUR'
 				value={labourRatio}
 				count={Math.floor(population * (labourRatio / 100))}
 				onChange={(v) => handleSliderChange('labour', v)}
 			/>
 			<SliderRow
 				icon={<IconShield className='h-3.5 w-3.5' />}
-				label='Military'
+				label='MILITARY'
 				value={militaryRatio}
 				count={Math.floor(population * (militaryRatio / 100))}
 				onChange={(v) => handleSliderChange('military', v)}
 			/>
 			<SliderRow
 				icon={<IconSpy className='h-3.5 w-3.5' />}
-				label='Spies'
+				label='SPIES'
 				value={spyRatio}
 				count={Math.floor(population * (spyRatio / 100))}
 				onChange={(v) => handleSliderChange('spy', v)}
 			/>
 			{/* Idle row - display only */}
 			<div className='space-y-1'>
-				<div className='flex items-center justify-between text-zinc-400'>
+				<div className='flex items-center justify-between text-[var(--text-muted)]'>
 					<div className='flex items-center gap-1.5'>
 						<IconMoodEmpty className='h-3.5 w-3.5' />
-						<span className='text-xs'>Idle</span>
+						<span className='text-xs'>IDLE</span>
 					</div>
 					<span className='text-xs font-medium text-white'>
 						{idleRatio}% ({Math.floor(population * (idleRatio / 100))})
 					</span>
 				</div>
-				<div className='relative h-1 rounded-full bg-zinc-800'>
+				<div className='relative h-1 bg-[var(--bg-surface)]'>
 					<div
-						className='absolute h-full rounded-full bg-white'
+						className='absolute h-full bg-primary'
 						style={{ width: `${idleRatio}%` }}
 					/>
 				</div>
@@ -101,7 +101,7 @@ function SliderRow({
 }) {
 	return (
 		<div className='space-y-1'>
-			<div className='flex items-center justify-between text-zinc-400'>
+			<div className='flex items-center justify-between text-[var(--text-muted)]'>
 				<div className='flex items-center gap-1.5'>
 					{icon}
 					<span className='text-xs'>{label}</span>

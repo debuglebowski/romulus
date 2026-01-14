@@ -813,7 +813,7 @@ export const getMyEconomy = query({
 			goldRate,
 			population: safePop,
 			totalMilitary,
-			totalUnits: safePop + totalMilitary,
+			totalUnits: safePop + totalMilitary + spies.length,
 			popCap,
 			labourRatio: safeLabourRatio,
 			militaryRatio: Number.isFinite(player.militaryRatio) ? (player.militaryRatio ?? 0) : 0,

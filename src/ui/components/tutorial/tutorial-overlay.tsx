@@ -189,7 +189,7 @@ export function TutorialOverlay({ open, onOpenChange, onComplete, onSkip, initia
 								<div
 									key={step.id}
 									className={cn(
-										'h-2 w-2 rounded-full transition-all duration-300',
+										'h-2 w-2',
 										index === currentStep
 											? 'bg-primary scale-125'
 											: index < currentStep
@@ -205,19 +205,12 @@ export function TutorialOverlay({ open, onOpenChange, onComplete, onSkip, initia
 						</p>
 					</div>
 
-					{/* Step content area with transition animations */}
+					{/* Step content area */}
 					<div className='relative min-h-[200px] overflow-hidden py-4'>
 						<div
 							key={currentStep}
 							className={cn(
-								'flex h-full items-center justify-center text-muted-foreground transition-all duration-200',
-								isTransitioning
-									? transitionDirection === 'next'
-										? 'animate-out fade-out-0 slide-out-to-left-4'
-										: 'animate-out fade-out-0 slide-out-to-right-4'
-									: transitionDirection === 'next'
-										? 'animate-in fade-in-0 slide-in-from-right-4'
-										: 'animate-in fade-in-0 slide-in-from-left-4',
+								'flex h-full items-center justify-center text-muted-foreground'
 							)}
 						>
 							{(() => {

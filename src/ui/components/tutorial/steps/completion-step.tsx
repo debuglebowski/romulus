@@ -11,9 +11,9 @@ export function CompletionStep() {
 		<TutorialStep
 			illustration={
 				<div className='flex items-center gap-4'>
-					<IconStar className='h-8 w-8 text-amber-400' />
-					<IconTrophy className='h-10 w-10 text-amber-400' />
-					<IconStar className='h-8 w-8 text-amber-400' />
+					<IconStar className='h-8 w-8 text-[var(--accent)]' />
+					<IconTrophy className='h-10 w-10 text-[var(--accent)]' />
+					<IconStar className='h-8 w-8 text-[var(--accent)]' />
 				</div>
 			}
 		>
