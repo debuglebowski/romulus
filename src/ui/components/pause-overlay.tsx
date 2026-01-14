@@ -28,15 +28,15 @@ export function PauseOverlay({
 
 	return (
 		<Dialog open={true} onOpenChange={() => {}}>
-			<DialogContent className="sm:max-w-sm" showCloseButton={false}>
+			<DialogContent className="sm:max-w-sm bg-zinc-950 border-zinc-800" showCloseButton={false}>
 				<DialogHeader>
-					<DialogTitle className="text-center text-xl font-bold uppercase tracking-wider text-[var(--accent)]">
+					<DialogTitle className="text-center text-xl font-bold text-primary">
 						Game Paused
 					</DialogTitle>
 				</DialogHeader>
 
 				<div className="text-center space-y-4">
-					<p className="text-sm text-[var(--text-muted)]">
+					<p className="text-sm text-zinc-400">
 						{isOwnPause ? 'You paused the game' : `${pausedByUsername} paused the game`}
 					</p>
 
@@ -44,12 +44,12 @@ export function PauseOverlay({
 						{formatTime(timeRemaining)}
 					</div>
 
-					<p className="text-xs text-[var(--text-faint)]">remaining in pause budget</p>
+					<p className="text-xs text-zinc-500">remaining in pause budget</p>
 
 					{/* Progress bar */}
-					<div className="h-2 w-full overflow-hidden bg-[var(--bg-raised)]">
+					<div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
 						<div
-							className="h-full bg-[var(--accent)] transition-all duration-1000"
+							className="h-full bg-primary rounded-full transition-all duration-1000"
 							style={{ width: `${progress}%` }}
 						/>
 					</div>
@@ -59,7 +59,7 @@ export function PauseOverlay({
 							Resume Game
 						</Button>
 					) : (
-						<p className="text-sm text-[var(--text-faint)]">
+						<p className="text-sm text-zinc-500">
 							Waiting for {pausedByUsername} to resume...
 						</p>
 					)}

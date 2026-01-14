@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { z } from 'zod';
 
 import { useSound } from '@/hooks/use-sound';
 import { Button } from '@/ui/_shadcn/button';
@@ -17,7 +18,6 @@ import { UpgradesModal } from '@/ui/components/upgrades-modal';
 
 import { api } from '../../../../convex/_generated/api';
 import { computeHorizon, coordKey, findPath } from '../../../../convex/lib/hex';
-import { z } from 'zod';
 
 import type { ArmyData, SpyData, TileData } from '@/ui/components/hex-map';
 import type { Id } from '../../../../convex/_generated/dataModel';
@@ -187,14 +187,18 @@ function GamePage() {
 					playSound('capture');
 					if (showToastAlerts) {
 						toast.error(
-							isCapital ? `Your capital was turned by ${event.actorUsername}!` : `Your city was turned by ${event.actorUsername}'s spies!`,
+							isCapital
+								? `Your capital was turned by ${event.actorUsername}!`
+								: `Your city was turned by ${event.actorUsername}'s spies!`,
 						);
 					}
 				} else if (didIFlipCity) {
 					// I flipped an enemy city
 					playSound('capture');
 					if (showToastAlerts) {
-						toast.success(isCapital ? `You turned ${event.targetUsername}'s capital!` : `Your spies turned ${event.targetUsername}'s city!`);
+						toast.success(
+							isCapital ? `You turned ${event.targetUsername}'s capital!` : `Your spies turned ${event.targetUsername}'s city!`,
+						);
 					}
 				}
 			}
@@ -601,14 +605,6 @@ function GamePage() {
 		],
 	);
 
-	// Army click handler
-	const handleArmyClick = useCallback((armyId: string) => {
-		setSelectedArmyId(armyId);
-		setSelectedTileId(null);
-		setSelectedSpyId(null);
-		setMode('default');
-	}, []);
-
 	// Spy click handler
 	const handleSpyClick = useCallback((spyId: string) => {
 		setSelectedSpyId(spyId);
@@ -830,8 +826,8 @@ function GamePage() {
 	}, [gameId, abandonMutation, navigate, isEliminated]);
 
 	const handleOpenSettings = useCallback(() => {
-		navigate({ 
-			search: (prev) => ({ ...prev, settings: 'open' as const })
+		navigate({
+			search: (prev) => ({ ...prev, settings: 'open' as const }),
 		} as Parameters<typeof navigate>[0]);
 	}, [navigate]);
 
@@ -951,7 +947,6 @@ function GamePage() {
 							rallyPointTileId={myPlayer?.rallyPointTileId ?? undefined}
 							movementPath={movementPath}
 							onTileClick={handleTileClick}
-							onArmyClick={handleArmyClick}
 							onSpyClick={handleSpyClick}
 							onBackgroundClick={handleCancelSelection}
 						/>

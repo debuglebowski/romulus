@@ -606,16 +606,7 @@ export function HexMap({
 				const avgHpPercent = army.averageHpPercent;
 
 				return (
-					<g
-						key={`moving-army-${army._id}`}
-						onClick={(e) => {
-							e.stopPropagation();
-							if (!hasDragged && army.isOwn) {
-								onArmyClick?.(army._id);
-							}
-						}}
-						style={{ cursor: army.isOwn && onArmyClick ? 'pointer' : 'default' }}
-					>
+					<g key={`moving-army-${army._id}`} style={{ pointerEvents: 'none' }}>
 						{/* Shield filled with team color */}
 						<IconShield
 							x={x - 5}

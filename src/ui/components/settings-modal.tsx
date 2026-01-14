@@ -53,7 +53,7 @@ export function SettingsModal({ open, onOpenChange, onReplayTutorial }: Settings
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle className="text-center uppercase tracking-wider">Settings</DialogTitle>
+					<DialogTitle className="text-center">Settings</DialogTitle>
 				</DialogHeader>
 
 				{!user ? (
@@ -65,7 +65,7 @@ export function SettingsModal({ open, onOpenChange, onReplayTutorial }: Settings
 						{/* Notification settings */}
 						<div className="space-y-4">
 							<div>
-								<h2 className="uppercase tracking-wider text-sm">Notifications</h2>
+								<h2 className="text-sm font-medium">Notifications</h2>
 								<div className="mt-1 border-b" />
 							</div>
 
@@ -84,7 +84,7 @@ export function SettingsModal({ open, onOpenChange, onReplayTutorial }: Settings
 						{onReplayTutorial && (
 							<div className="space-y-4">
 								<div>
-									<h2 className="uppercase tracking-wider text-sm">Tutorial</h2>
+									<h2 className="text-sm font-medium">Tutorial</h2>
 									<div className="mt-1 border-b" />
 								</div>
 
@@ -101,7 +101,7 @@ export function SettingsModal({ open, onOpenChange, onReplayTutorial }: Settings
 						{/* Save button */}
 						<div className="flex justify-center">
 							<Button onClick={handleSave} disabled={!hasChanges || isSaving} className="w-32">
-								{isSaving ? '...' : saved ? 'SAVED' : 'SAVE'}
+								{isSaving ? '...' : saved ? 'Saved' : 'Save'}
 							</Button>
 						</div>
 					</div>

@@ -11,16 +11,15 @@ export function CompletionStep() {
 		<TutorialStep
 			illustration={
 				<div className='flex items-center gap-4'>
-					<IconStar className='h-8 w-8 text-[var(--accent)]' />
-					<IconTrophy className='h-10 w-10 text-[var(--accent)]' />
-					<IconStar className='h-8 w-8 text-[var(--accent)]' />
+					<IconStar className='h-8 w-8 text-primary' />
+					<IconTrophy className='h-10 w-10 text-primary' />
+					<IconStar className='h-8 w-8 text-primary' />
 				</div>
 			}
 		>
-			<TutorialSection title='Congratulations, Commander!'>
+			<TutorialSection title='Congratulations!'>
 				<p>
-					You have completed the tutorial and learned the fundamentals of warfare. You are now ready to lead your empire to glory on the
-					battlefield.
+					You have completed the tutorial and learned the fundamentals. You are now ready to lead your empire to glory on the battlefield.
 				</p>
 			</TutorialSection>
 
@@ -37,8 +36,8 @@ export function CompletionStep() {
 
 			<TutorialSection title='Your Journey Begins'>
 				<p>
-					The path to domination awaits. Apply what you have learned, adapt to your enemies, and claim victory. Remember: every great
-					commander started with a single territory.
+					The path to domination awaits. Apply what you have learned, adapt to your enemies, and claim victory. Remember: every great leader
+					started with a single territory.
 				</p>
 			</TutorialSection>
 

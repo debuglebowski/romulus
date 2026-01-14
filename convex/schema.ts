@@ -45,6 +45,7 @@ const schema = defineSchema({
 			v.literal('inProgress'),
 			v.literal('finished'),
 		),
+		startCountdownEndsAt: v.optional(v.number()),
 		startedAt: v.optional(v.number()),
 		finishedAt: v.optional(v.number()),
 		currentTick: v.optional(v.number()),

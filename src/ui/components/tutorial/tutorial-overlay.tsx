@@ -117,6 +117,7 @@ export function TutorialOverlay({ open, onOpenChange, onComplete, onSkip, initia
 
 	const handleSkip = useCallback(async () => {
 		await skipTutorial();
+		setIsSkipConfirmOpen(false);
 		onSkip?.();
 		onOpenChange(false);
 	}, [skipTutorial, onSkip, onOpenChange]);
@@ -207,12 +208,7 @@ export function TutorialOverlay({ open, onOpenChange, onComplete, onSkip, initia
 
 					{/* Step content area */}
 					<div className='relative min-h-[200px] overflow-hidden py-4'>
-						<div
-							key={currentStep}
-							className={cn(
-								'flex h-full items-center justify-center text-muted-foreground'
-							)}
-						>
+						<div key={currentStep} className={cn('flex h-full items-center justify-center text-muted-foreground')}>
 							{(() => {
 								const StepComponent = STEP_COMPONENTS[stepInfo.id];
 								return StepComponent ? <StepComponent /> : null;

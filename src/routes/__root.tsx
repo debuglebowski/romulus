@@ -1,28 +1,27 @@
 import { useAuthActions } from '@convex-dev/auth/react';
-import { IconHome, IconLogout, IconSettings } from '@tabler/icons-react';
+import { IconLogout, IconMenu2, IconSettings, IconUser } from '@tabler/icons-react';
 import { createRootRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router';
 import { useConvexAuth, useMutation, useQuery } from 'convex/react';
 import { useCallback, useEffect, useState } from 'react';
+import { z } from 'zod';
 
-import { Avatar, AvatarFallback } from '@/ui/_shadcn/avatar';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuGroup,
 	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from '@/ui/_shadcn/dropdown-menu';
 import { AuthForm } from '@/ui/components/auth-form';
+import { ProfileModal } from '@/ui/components/profile-modal';
 import { SettingsModal } from '@/ui/components/settings-modal';
 import { TutorialOverlay } from '@/ui/components/tutorial/tutorial-overlay';
 
 import { api } from '../../convex/_generated/api';
-import { z } from 'zod';
 
 const rootSearchSchema = z.object({
 	settings: z.enum(['open']).optional(),
+	profile: z.enum(['open']).optional(),
 });
 
 export const Route = createRootRoute({
@@ -42,19 +41,38 @@ function RootLayout() {
 	// Settings modal controlled by ?settings search param
 	const searchParams = new URLSearchParams(location.search);
 	const settingsOpen = searchParams.get('settings') === 'open';
+	const profileOpen = searchParams.get('profile') === 'open';
 
 	const setSettingsOpen = useCallback(
 		(open: boolean) => {
 			if (open) {
-				navigate({ 
-					search: (prev) => ({ ...prev, settings: 'open' as const })
+				navigate({
+					search: (prev) => ({ ...prev, settings: 'open' as const }),
 				} as Parameters<typeof navigate>[0]);
 			} else {
-				navigate({ 
+				navigate({
 					search: (prev) => {
 						const { settings: _, ...rest } = prev;
 						return rest;
-					}
+					},
+				} as Parameters<typeof navigate>[0]);
+			}
+		},
+		[navigate],
+	);
+
+	const setProfileOpen = useCallback(
+		(open: boolean) => {
+			if (open) {
+				navigate({
+					search: (prev) => ({ ...prev, profile: 'open' as const }),
+				} as Parameters<typeof navigate>[0]);
+			} else {
+				navigate({
+					search: (prev) => {
+						const { profile: _, ...rest } = prev;
+						return rest;
+					},
 				} as Parameters<typeof navigate>[0]);
 			}
 		},
@@ -76,26 +94,14 @@ function RootLayout() {
 
 	// Redirect to setup if no username
 	useEffect(() => {
-		if (
-			isAuthenticated &&
-			user &&
-			user.settingSoundVolume !== undefined &&
-			!user.username &&
-			window.location.pathname !== '/setup'
-		) {
+		if (isAuthenticated && user && user.settingSoundVolume !== undefined && !user.username && window.location.pathname !== '/setup') {
 			navigate({ to: '/setup' });
 		}
 	}, [isAuthenticated, user, navigate]);
 
 	// Show tutorial for first-time users after setup is complete
 	useEffect(() => {
-		if (
-			isAuthenticated &&
-			user &&
-			user.username &&
-			user.tutorialCompleted !== true &&
-			user.tutorialSkipped !== true
-		) {
+		if (isAuthenticated && user && user.username && user.tutorialCompleted !== true && user.tutorialSkipped !== true) {
 			setTutorialOpen(true);
 		}
 	}, [isAuthenticated, user]);
@@ -112,51 +118,49 @@ function RootLayout() {
 		return <AuthForm />;
 	}
 
-	const displayName = user?.username ?? user?.email ?? '';
-	const initials = displayName.slice(0, 2).toUpperCase();
-
 	return (
 		<div className='min-h-screen'>
-			{/* HUD corner (hidden when in active game - game has its own hamburger menu) */}
+			{/* Top menu bar (hidden on title screen and in active game) */}
 			{!isTitle && !isInGame && (
-				<div className='fixed right-4 top-4 z-50 flex items-center gap-3'>
-					{/* Home button */}
-					<Link
-						to='/lobbies'
-						className='flex h-8 w-8 items-center justify-center border-2 border-primary bg-background text-primary hover:bg-primary hover:text-primary-foreground'
-					>
-						<IconHome size={16} />
-					</Link>
+				<header className='sticky top-0 z-50 border-b bg-background'>
+					<div className='mx-auto flex max-w-7xl items-center justify-between px-4 py-3'>
+						{/* Logo/Home link */}
+						<Link to='/lobbies' className='text-xl font-semibold text-primary hover:text-primary/80'>
+							Romulus
+						</Link>
 
-					{/* User coin */}
-					<DropdownMenu>
-						<DropdownMenuTrigger className='cursor-pointer outline-none'>
-							<Avatar className='h-8 w-8 border-2 border-primary hover:border-[color:var(--accent-hover)]'>
-								<AvatarFallback className='bg-background text-primary font-semibold uppercase tracking-wider'>
-									{initials}
-								</AvatarFallback>
-							</Avatar>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent align='end' className='w-56'>
-							<DropdownMenuGroup>
-								<DropdownMenuLabel className='font-normal'>
-									<span className='block truncate text-sm font-medium'>{displayName}</span>
-								</DropdownMenuLabel>
-							</DropdownMenuGroup>
-							<DropdownMenuSeparator />
-							<DropdownMenuGroup>
-							<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
-								<IconSettings />
-								Settings
-							</DropdownMenuItem>
-								<DropdownMenuItem onClick={() => signOut()}>
-									<IconLogout />
-									Sign out
-								</DropdownMenuItem>
-							</DropdownMenuGroup>
-						</DropdownMenuContent>
-					</DropdownMenu>
-				</div>
+						{/* User menu */}
+						<div className='flex items-center gap-3'>
+							{/* User avatar dropdown */}
+							<DropdownMenu>
+								<DropdownMenuTrigger asChild>
+									<button
+										type='button'
+										className='flex h-8 w-8 items-center justify-center rounded-md border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+									>
+										<IconMenu2 size={18} />
+									</button>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent align='end' className='w-56'>
+									<DropdownMenuGroup>
+										<DropdownMenuItem onClick={() => setProfileOpen(true)}>
+											<IconUser />
+											Profile
+										</DropdownMenuItem>
+										<DropdownMenuItem onClick={() => setSettingsOpen(true)}>
+											<IconSettings />
+											Settings
+										</DropdownMenuItem>
+										<DropdownMenuItem onClick={() => signOut()}>
+											<IconLogout />
+											Sign out
+										</DropdownMenuItem>
+									</DropdownMenuGroup>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+					</div>
+				</header>
 			)}
 
 			<main>
@@ -172,12 +176,18 @@ function RootLayout() {
 				}}
 			/>
 
-			{/* Tutorial overlay for first-time users */}
-			<TutorialOverlay
-				open={tutorialOpen}
-				onOpenChange={setTutorialOpen}
-				initialStep={user?.tutorialStep ?? 0}
+			<ProfileModal
+				open={profileOpen}
+				onOpenChange={setProfileOpen}
+				onReplayTutorial={() => {
+					setProfileOpen(false);
+					setTutorialOpen(true);
+				}}
+				onSignOut={() => signOut()}
 			/>
+
+			{/* Tutorial overlay for first-time users */}
+			<TutorialOverlay open={tutorialOpen} onOpenChange={setTutorialOpen} initialStep={user?.tutorialStep ?? 0} />
 		</div>
 	);
 }

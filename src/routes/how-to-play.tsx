@@ -13,14 +13,14 @@ const PAGES = [
 	{
 		sections: [
 			{
-				title: 'OBJECTIVE',
+				title: 'Objective',
 				content: [
 					'Capture all enemy capitals to win.',
 					'You are eliminated if your capital is captured or you go bankrupt.',
 				],
 			},
 			{
-				title: 'ECONOMY',
+				title: 'Economy',
 				content: [
 					'Your population generates gold through labour.',
 					'Use the sliders to balance between Labour, Military, and Spies.',
@@ -29,7 +29,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'POPULATION',
+				title: 'Population',
 				content: [
 					'Population grows over time based on labourers and cities.',
 					'Your capital provides +50 pop cap, each city adds +20.',
@@ -41,7 +41,7 @@ const PAGES = [
 	{
 		sections: [
 			{
-				title: 'MILITARY',
+				title: 'Military',
 				content: [
 					'Set a rally point and assign population to Military.',
 					'Units spawn at your rally point over time.',
@@ -50,7 +50,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'COMBAT',
+				title: 'Combat',
 				content: [
 					'When armies meet, combat happens automatically each tick.',
 					'Damage is based on army strength vs enemy defense.',
@@ -63,7 +63,7 @@ const PAGES = [
 	{
 		sections: [
 			{
-				title: 'SPIES',
+				title: 'Spies',
 				content: [
 					'Assign population to Spies to train agents.',
 					'Spies move invisibly through any territory.',
@@ -71,7 +71,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'ALLEGIANCE',
+				title: 'Allegiance',
 				content: [
 					'Spies at enemy cities lower the owner\'s allegiance.',
 					'When allegiance hits 0, the city flips to you!',
@@ -80,7 +80,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'CAPITAL INTEL',
+				title: 'Capital Intel',
 				content: [
 					'Spies at enemy capitals gather intel over time.',
 					'The longer they stay, the more you learn about that player.',
@@ -91,7 +91,7 @@ const PAGES = [
 	{
 		sections: [
 			{
-				title: 'CAPITAL MOVEMENT',
+				title: 'Capital Movement',
 				content: [
 					'Your capital can be moved to any owned city.',
 					'Travel time is 30 sec/hex - you\'re frozen during the move.',
@@ -99,7 +99,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'UPGRADES',
+				title: 'Upgrades',
 				content: [
 					'Spend gold on permanent upgrades for your empire.',
 					'Upgrades boost military strength, defense, spy effectiveness, and more.',
@@ -107,7 +107,7 @@ const PAGES = [
 				],
 			},
 			{
-				title: 'ALLIANCES',
+				title: 'Alliances',
 				content: [
 					'Form alliances with other players for mutual benefit.',
 					'Share vision, gold, or intel with your allies.',
@@ -129,7 +129,7 @@ function HowToPlayPage() {
 					<IconArrowLeft size={18} />
 					Back
 				</Link>
-				<h1 className='text-xl uppercase tracking-wider'>How to Play</h1>
+				<h1 className='text-xl font-semibold'>How to Play</h1>
 				<div className='w-16' />
 			</div>
 
@@ -137,7 +137,7 @@ function HowToPlayPage() {
 				<CardContent className='space-y-6 p-6'>
 					{PAGES[page].sections.map((section) => (
 						<div key={section.title}>
-							<h2 className='mb-2 font-semibold uppercase tracking-wide'>{section.title}</h2>
+							<h2 className='mb-2 font-semibold'>{section.title}</h2>
 							<div className='mb-4 border-b border-muted' />
 							<div className='space-y-1 text-muted-foreground'>
 								{section.content.map((line, i) => (

@@ -142,34 +142,34 @@ export function ContextPanel({
 
 	if (!selectedTile && !selectedArmy && !selectedSpy) {
 		return (
-			<div className='border border-[var(--border-default)] bg-[var(--bg-base)] px-3 py-2'>
-				<p className='text-sm text-[var(--text-faint)]'>Click a tile, army, or spy to select</p>
+			<div className='rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2'>
+				<p className='text-sm text-zinc-500'>Click a tile, army, or spy to select</p>
 			</div>
 		);
 	}
 
 	return (
-		<div className='border border-[var(--border-default)] bg-[var(--bg-base)] px-3 py-2 space-y-2'>
+		<div className='rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 space-y-2'>
 			{/* Header with action icons */}
 			<div className='flex items-center justify-between'>
 				<div className='flex items-center gap-2'>
-					<h3 className='text-sm font-medium text-white uppercase'>
+					<h3 className='text-sm font-medium text-white'>
 						{selectedArmy ? 'Army' : selectedTile?.type === 'capital' ? 'Capital' : selectedTile?.type === 'city' ? 'City' : 'Territory'}
 					</h3>
-					{selectedTile?.ownerId && <span className='text-xs text-[var(--text-faint)]'>• Owned</span>}
+					{selectedTile?.ownerId && <span className='text-xs text-zinc-500'>• Owned</span>}
 				</div>
 				<div className='flex items-center gap-1'>
 					{/* Rally point icon button - only for own tiles in default mode */}
 					{isOwnTile && !selectedArmy && mode === 'default' && (
 						<button
 							onClick={onSetRallyMode}
-							className='p-1 hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-green-400'
+							className='p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-green-400'
 							title='Set Rally Point'
 						>
 							<IconFlag size={14} />
 						</button>
 					)}
-					<button onClick={onCancelSelection} className='p-1 hover:bg-[var(--bg-surface)] text-[var(--text-muted)] hover:text-white'>
+					<button onClick={onCancelSelection} className='p-1 hover:bg-zinc-900 rounded text-zinc-400 hover:text-white'>
 						<IconX size={14} />
 					</button>
 				</div>
@@ -182,13 +182,13 @@ export function ContextPanel({
 					{isOwnTile && (
 						<button
 							onClick={onSetRallyPoint}
-							className='w-full flex items-center justify-center gap-1.5 bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700'
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-green-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-green-700'
 						>
 							<IconFlag size={14} />
 							Set Here
 						</button>
 					)}
-					<button onClick={onCancelSelection} className='w-full bg-[var(--bg-raised)] px-2 py-1.5 text-xs text-white hover:bg-[var(--bg-raised)]'>
+					<button onClick={onCancelSelection} className='w-full rounded bg-zinc-800 px-2 py-1.5 text-xs text-white hover:bg-zinc-700'>
 						Cancel
 					</button>
 				</div>
@@ -196,17 +196,17 @@ export function ContextPanel({
 
 			{/* Build City button for owned empty tiles */}
 			{selectedTile && isOwnTile && selectedTile.type === 'empty' && mode === 'default' && !isCapitalMoving && (
-				<div className='border-t border-[var(--border-default)] pt-2'>
+				<div className='border-t border-zinc-800 pt-2'>
 					<button
 						onClick={onBuildCity}
 						disabled={playerGold < CITY_BUILD_COST}
-						className='w-full flex items-center justify-center gap-1.5 bg-[var(--accent)] px-2 py-1.5 text-xs font-medium text-white hover:bg-[var(--accent-hover)] disabled:bg-[var(--bg-raised)] disabled:text-[var(--text-muted)] disabled:cursor-not-allowed'
+						className='w-full flex items-center justify-center gap-1.5 rounded bg-primary px-2 py-1.5 text-xs font-medium text-white hover:bg-primary/90 disabled:bg-zinc-800 disabled:text-zinc-400 disabled:cursor-not-allowed'
 					>
 						<IconBuilding size={14} />
 						<span className='tabular-nums'>Build City ({CITY_BUILD_COST}g)</span>
 					</button>
 					{playerGold < CITY_BUILD_COST && (
-						<p className='text-xs text-[var(--text-faint)] mt-1 text-center tabular-nums'>
+						<p className='text-xs text-zinc-500 mt-1 text-center tabular-nums'>
 							Need {CITY_BUILD_COST - Math.floor(playerGold)} more gold
 						</p>
 					)}
@@ -215,10 +215,10 @@ export function ContextPanel({
 
 			{/* Move Capital button for owned cities */}
 			{selectedTile && isOwnTile && selectedTile.type === 'city' && mode === 'default' && !isCapitalMoving && (
-				<div className='border-t border-[var(--border-default)] pt-2'>
+				<div className='border-t border-zinc-800 pt-2'>
 					<button
 						onClick={onMoveCapitalHere}
-						className='w-full flex items-center justify-center gap-1.5 bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
+						className='w-full flex items-center justify-center gap-1.5 rounded bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
 					>
 						<IconCrown size={14} />
 						Move Capital Here
@@ -228,12 +228,12 @@ export function ContextPanel({
 
 			{/* Spy Intel section - shows intel from player's spies on enemy tiles */}
 			{selectedTile && !isOwnTile && spyIntel && mode === 'default' && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1'>
-					<div className='flex items-center gap-1.5 text-xs text-purple-400 uppercase'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1'>
+					<div className='flex items-center gap-1.5 text-xs text-purple-400'>
 						<IconEye size={14} />
 						<span>Intel</span>
 					</div>
-					<div className='text-xs text-[var(--text-primary)] pl-5 space-y-0.5'>
+					<div className='text-xs text-zinc-300 pl-5 space-y-0.5'>
 						<div className='flex justify-between'>
 							<span>Armies:</span>
 							<span className='text-white font-medium tabular-nums'>{spyIntel.armyCount}</span>
@@ -248,8 +248,8 @@ export function ContextPanel({
 
 			{/* Allegiance section - shows city loyalty breakdown when spy is present */}
 			{selectedTile && allegianceData && (selectedTile.type === 'city' || selectedTile.type === 'capital') && mode === 'default' && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
-					<div className='flex items-center gap-1.5 text-xs text-[var(--accent)] uppercase'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs text-primary'>
 						<IconCrown size={14} />
 						<span>Allegiance</span>
 					</div>
@@ -257,19 +257,19 @@ export function ContextPanel({
 						{allegianceData.breakdown.map((entry) => (
 							<div key={entry.teamId} className='flex items-center gap-2'>
 								<div
-									className='w-2 h-2 shrink-0'
+									className='w-2 h-2 rounded-full shrink-0'
 									style={{ backgroundColor: entry.color }}
 								/>
-								<div className='flex-1 h-1.5 bg-[var(--bg-raised)] overflow-hidden'>
+								<div className='flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden'>
 									<div
-										className='h-full transition-all'
+										className='h-full rounded-full transition-all'
 										style={{
 											width: `${entry.score}%`,
 											backgroundColor: entry.isOwner ? '#22c55e' : entry.isMe ? '#a855f7' : entry.color,
 										}}
 									/>
 								</div>
-								<span className={`text-[10px] w-8 text-right tabular-nums ${entry.isMe ? 'text-purple-400 font-medium' : 'text-[var(--text-muted)]'}`}>
+								<span className={`text-[10px] w-8 text-right tabular-nums ${entry.isMe ? 'text-purple-400 font-medium' : 'text-zinc-400'}`}>
 									{Math.round(entry.score)}%
 								</span>
 							</div>
@@ -278,15 +278,15 @@ export function ContextPanel({
 					{/* Show flip warning if owner allegiance is low */}
 					{allegianceData.breakdown.find((b) => b.isOwner)?.score !== undefined &&
 					 allegianceData.breakdown.find((b) => b.isOwner)!.score < 30 && (
-						<p className='text-[10px] text-[var(--accent)]'>City loyalty wavering!</p>
+						<p className='text-[10px] text-primary'>City loyalty wavering!</p>
 					)}
 				</div>
 			)}
 
 			{/* Spies on tile section */}
 			{selectedTile && spiesOnTile.length > 0 && mode !== 'rally' && mode !== 'spy-move' && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
-					<div className='flex items-center gap-1.5 text-xs uppercase'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs'>
 						<IconEye size={14} className='text-purple-400' />
 						<span className='text-white tabular-nums'>{spiesOnTile.length} {spiesOnTile.length === 1 ? 'spy' : 'spies'}</span>
 						{spiesOnTile.some((s) => s.isRevealed) && (
@@ -299,7 +299,7 @@ export function ContextPanel({
 					{mode === 'default' && spiesOnTile.length > 0 && (
 						<button
 							onClick={() => onSetSpyMoveMode?.(spiesOnTile[0]._id)}
-							className='w-full flex items-center justify-center gap-1.5 bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-purple-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-purple-700'
 						>
 							<IconRoute size={14} />
 							Move Spy
@@ -310,9 +310,9 @@ export function ContextPanel({
 
 			{/* Spy move mode UI */}
 			{mode === 'spy-move' && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
 					<p className='text-xs text-purple-400'>Select destination for spy</p>
-					<button onClick={onCancelSelection} className='w-full bg-[var(--bg-raised)] px-2 py-1.5 text-xs text-white hover:bg-[var(--bg-raised)]'>
+					<button onClick={onCancelSelection} className='w-full rounded bg-zinc-800 px-2 py-1.5 text-xs text-white hover:bg-zinc-700'>
 						Cancel
 					</button>
 				</div>
@@ -320,7 +320,7 @@ export function ContextPanel({
 
 			{/* Stationary armies section - separate card-like section */}
 			{selectedTile && stationaryArmiesOnTile.length > 0 && mode !== 'rally' && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
 					{(() => {
 						const totalUnits = stationaryArmiesOnTile.reduce((sum, a) => sum + a.unitCount, 0);
 						const totalHp = stationaryArmiesOnTile.reduce((sum, a) => sum + a.totalHp, 0);
@@ -329,17 +329,17 @@ export function ContextPanel({
 
 						return (
 							<>
-								<div className='flex items-center gap-1.5 text-xs uppercase'>
-									<IconShield size={14} className={isInCombat ? 'text-red-400' : 'text-[var(--text-muted)]'} />
+								<div className='flex items-center gap-1.5 text-xs'>
+									<IconShield size={14} className={isInCombat ? 'text-red-400' : 'text-zinc-400'} />
 									<span className='text-white tabular-nums'>{totalUnits} units</span>
 									{isInCombat && <span className='text-red-400'>(in combat)</span>}
 								</div>
 								{avgHpPercent < 100 && (
-									<div className='flex items-center gap-2 text-xs text-[var(--text-muted)]'>
+									<div className='flex items-center gap-2 text-xs text-zinc-400'>
 										<span>HP:</span>
-										<div className='flex-1 h-1.5 bg-[var(--bg-raised)] overflow-hidden'>
+										<div className='flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden'>
 											<div
-												className='h-full transition-all'
+												className='h-full rounded-full transition-all'
 												style={{
 													width: `${avgHpPercent}%`,
 													backgroundColor: avgHpPercent > 50 ? '#22c55e' : avgHpPercent > 25 ? '#f59e0b' : '#ef4444',
@@ -361,14 +361,14 @@ export function ContextPanel({
 									<div className='flex gap-1.5'>
 										<button
 											onClick={() => onSetMoveMode?.(ownArmy._id)}
-											className='flex-1 flex items-center justify-center gap-1.5 bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700'
+											className='flex-1 flex items-center justify-center gap-1.5 rounded bg-blue-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-blue-700'
 										>
 											<IconRoute size={14} />
 											Move
 										</button>
 										<button
 											onClick={() => onCallHome?.(ownArmy._id)}
-											className='flex-1 flex items-center justify-center gap-1.5 bg-[var(--bg-raised)] px-2 py-1.5 text-xs font-medium text-white hover:bg-[var(--bg-raised)]'
+											className='flex-1 flex items-center justify-center gap-1.5 rounded bg-zinc-800 px-2 py-1.5 text-xs font-medium text-white hover:bg-zinc-700'
 										>
 											<IconHome size={14} />
 											Home
@@ -378,7 +378,7 @@ export function ContextPanel({
 									{ownArmy.isInCombat && (
 										<button
 											onClick={() => onRetreat?.(ownArmy._id)}
-											className='w-full flex items-center justify-center gap-1.5 bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
+											className='w-full flex items-center justify-center gap-1.5 rounded bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
 										>
 											<IconLogout size={14} />
 											Retreat
@@ -392,9 +392,9 @@ export function ContextPanel({
 					{/* Move mode UI */}
 					{mode === 'move' && selectedArmy && (
 						<div className='space-y-2'>
-							<p className='text-xs text-[var(--accent)]'>Select destination tile</p>
+							<p className='text-xs text-primary'>Select destination tile</p>
 							<div className='space-y-1'>
-								<div className='flex justify-between text-xs text-[var(--text-muted)]'>
+								<div className='flex justify-between text-xs text-zinc-400'>
 									<span>Units to move</span>
 									<span className='text-white font-medium tabular-nums'>
 										{moveUnitCount} / {selectedArmy.unitCount}
@@ -411,7 +411,7 @@ export function ContextPanel({
 									}}
 								/>
 							</div>
-							<button onClick={onCancelSelection} className='w-full bg-[var(--bg-raised)] px-2 py-1.5 text-xs text-white hover:bg-[var(--bg-raised)]'>
+							<button onClick={onCancelSelection} className='w-full rounded bg-zinc-800 px-2 py-1.5 text-xs text-white hover:bg-zinc-700'>
 								Cancel
 							</button>
 						</div>
@@ -421,20 +421,20 @@ export function ContextPanel({
 
 			{/* Moving army info (directly selected) */}
 			{selectedArmy && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
-					<div className='flex items-center gap-1.5 text-xs uppercase'>
-						<IconShield size={14} className='text-[var(--text-muted)]' />
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs'>
+						<IconShield size={14} className='text-zinc-400' />
 						<span className='text-white tabular-nums'>{selectedArmy.unitCount} units</span>
-						{selectedArmy.targetTileId && <span className='text-[var(--accent)]'>(moving)</span>}
+						{selectedArmy.targetTileId && <span className='text-primary'>(moving)</span>}
 					</div>
 
 					{/* HP bar for moving army */}
 					{selectedArmy.averageHpPercent < 100 && (
-						<div className='flex items-center gap-2 text-xs text-[var(--text-muted)]'>
+						<div className='flex items-center gap-2 text-xs text-zinc-400'>
 							<span>HP:</span>
-							<div className='flex-1 h-1.5 bg-[var(--bg-raised)] overflow-hidden'>
+							<div className='flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden'>
 								<div
-									className='h-full transition-all'
+									className='h-full rounded-full transition-all'
 									style={{
 										width: `${selectedArmy.averageHpPercent}%`,
 										backgroundColor:
@@ -452,14 +452,14 @@ export function ContextPanel({
 
 					{/* Time estimates for moving army */}
 					{timeEstimates && (
-						<div className='text-xs text-[var(--text-muted)] space-y-0.5 pl-5'>
+						<div className='text-xs text-zinc-400 space-y-0.5 pl-5'>
 							<div className='flex justify-between'>
 								<span>Next tile:</span>
-								<span className='text-[var(--accent)] font-medium tabular-nums'>{formatTime(timeEstimates.timeToNextTile)}</span>
+								<span className='text-primary font-medium tabular-nums'>{formatTime(timeEstimates.timeToNextTile)}</span>
 							</div>
 							<div className='flex justify-between'>
 								<span>Destination (<span className='tabular-nums'>{timeEstimates.tilesRemaining}</span> tiles):</span>
-								<span className='text-[var(--accent)] font-medium tabular-nums'>{formatTime(timeEstimates.timeToDestination)}</span>
+								<span className='text-primary font-medium tabular-nums'>{formatTime(timeEstimates.timeToDestination)}</span>
 							</div>
 						</div>
 					)}
@@ -468,7 +468,7 @@ export function ContextPanel({
 					{selectedArmy.isOwn && selectedArmy.targetTileId && mode === 'default' && (
 						<button
 							onClick={onCancelMove}
-							className='w-full flex items-center justify-center gap-1.5 bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
 						>
 							<IconX size={14} />
 							Cancel Move
@@ -479,8 +479,8 @@ export function ContextPanel({
 
 			{/* Selected spy info (directly selected moving spy) */}
 			{selectedSpy && (
-				<div className='border-t border-[var(--border-default)] pt-2 space-y-1.5'>
-					<div className='flex items-center gap-1.5 text-xs uppercase'>
+				<div className='border-t border-zinc-800 pt-2 space-y-1.5'>
+					<div className='flex items-center gap-1.5 text-xs'>
 						<IconEye size={14} className={selectedSpy.isRevealed ? 'text-red-400' : 'text-purple-400'} />
 						<span className='text-white'>Spy</span>
 						{selectedSpy.targetTileId && <span className='text-purple-400'>(moving)</span>}
@@ -491,7 +491,7 @@ export function ContextPanel({
 					{selectedSpy.isOwn && selectedSpy.targetTileId && mode === 'default' && (
 						<button
 							onClick={onCancelSpyMove}
-							className='w-full flex items-center justify-center gap-1.5 bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
+							className='w-full flex items-center justify-center gap-1.5 rounded bg-red-600 px-2 py-1.5 text-xs font-medium text-white hover:bg-red-700'
 						>
 							<IconX size={14} />
 							Cancel Move

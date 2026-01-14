@@ -42,12 +42,12 @@ function SetupPage() {
 
 	return (
 		<div className='flex min-h-screen flex-col items-center justify-center gap-6 p-4'>
-			<h1 className='text-2xl uppercase tracking-wider'>Choose Your Name</h1>
+			<h1 className='text-2xl font-semibold'>Choose Your Name</h1>
 
 			<form onSubmit={handleSubmit} className='flex flex-col items-center gap-6'>
 				<Input
 					type='text'
-					placeholder='MaximusPrime_'
+					placeholder='Enter username'
 					value={username}
 					onChange={(e) => setUsernameValue(e.target.value)}
 					maxLength={16}
@@ -64,7 +64,7 @@ function SetupPage() {
 				{error && <p className='text-destructive text-sm'>{error}</p>}
 
 				<Button type='submit' className='w-32' disabled={isSubmitting || !username.trim()}>
-					{isSubmitting ? '...' : 'CONTINUE'}
+					{isSubmitting ? '...' : 'Continue'}
 				</Button>
 			</form>
 		</div>

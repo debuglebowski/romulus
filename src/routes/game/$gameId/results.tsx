@@ -66,16 +66,16 @@ function ResultsPage() {
 		<div className='mx-auto max-w-2xl p-4'>
 			<Card>
 				<CardHeader className='text-center'>
-					<CardTitle className='text-2xl uppercase tracking-wider'>Game Results</CardTitle>
-					<p className='text-muted-foreground uppercase text-[11px] tracking-wide'>{game.name}</p>
+					<CardTitle className='text-2xl'>Game Results</CardTitle>
+					<p className='text-muted-foreground text-sm'>{game.name}</p>
 				</CardHeader>
 				<CardContent className='space-y-6'>
 					{/* Winner highlight */}
 					{winner && (
-						<div className='border-2 border-[color:var(--accent)] bg-[color:var(--accent)]/10 p-6 text-center'>
-							<IconTrophy className='mx-auto h-12 w-12 text-[color:var(--accent)]' />
-							<h2 className='mt-2 font-semibold text-2xl uppercase tracking-wider'>{winner.username}</h2>
-							<p className='text-muted-foreground uppercase text-[11px] tracking-wide'>Winner</p>
+						<div className='rounded-lg border-2 border-primary bg-primary/10 p-6 text-center'>
+							<IconTrophy className='mx-auto h-12 w-12 text-primary' />
+							<h2 className='mt-2 text-2xl font-semibold'>{winner.username}</h2>
+							<p className='text-muted-foreground text-sm'>Winner</p>
 						</div>
 					)}
 
@@ -84,7 +84,7 @@ function ResultsPage() {
 						<div>
 							<div className='flex items-center justify-center gap-1 text-muted-foreground'>
 								<IconClock className='h-4 w-4' />
-								<span className='text-[11px] uppercase tracking-wide'>Duration</span>
+								<span className='text-sm'>Duration</span>
 							</div>
 							<p className='font-semibold tabular-nums'>{formatDuration(gameDuration)}</p>
 						</div>
@@ -92,12 +92,12 @@ function ResultsPage() {
 
 					{/* Standings */}
 					<div className='space-y-2'>
-						<h3 className='font-semibold uppercase text-[11px] tracking-wide text-muted-foreground'>Final Standings</h3>
+						<h3 className='text-sm font-medium text-muted-foreground'>Final Standings</h3>
 						{sortedPlayers.map((player) => (
 							<div
 								key={player._id}
-								className={`flex items-center justify-between border p-3 ${
-									player.finishPosition === 1 ? 'border-[color:var(--accent)] bg-[color:var(--accent)]/10' : ''
+								className={`flex items-center justify-between rounded-lg border p-3 ${
+									player.finishPosition === 1 ? 'border-primary bg-primary/10' : ''
 								}`}
 							>
 								<div className='flex items-center gap-3'>
@@ -105,7 +105,7 @@ function ResultsPage() {
 										#{player.finishPosition}
 									</span>
 									<div
-										className='h-4 w-4'
+										className='h-4 w-4 rounded'
 										style={{ backgroundColor: player.color }}
 									/>
 									<span className='font-medium'>
@@ -113,7 +113,7 @@ function ResultsPage() {
 										{player.userId === user._id && ' (You)'}
 									</span>
 								</div>
-								<div className='text-muted-foreground text-[11px] uppercase tracking-wide'>
+								<div className='text-muted-foreground text-sm'>
 									{player.eliminationReason === 'forfeit' && 'Forfeit'}
 									{player.eliminationReason === 'capitalCaptured' && 'Capital Captured'}
 									{player.eliminationReason === 'debt' && 'Debt'}

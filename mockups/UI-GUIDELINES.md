@@ -1,95 +1,116 @@
 # Romulus UI Guidelines
 
 ## Philosophy
-Ancient gravitas meets modern minimalism. Every element should feel like it belongs to Rome while remaining clean and scannable.
+Clean, modern, and minimal. The UI should feel intuitive and get out of the way, letting the game mechanics shine. We use shadcn/ui as our foundation with small tweaks for personality.
 
 ## Color Palette
 
 ### Primary
-- **Gold** `#D4AF37` — buttons, highlights, active states
-- **Crimson** `#8B0000` — accents, warnings, enemy indicators
+- **Indigo** `#4f46e5` — buttons, highlights, active states
+- **Red** `#ef4444` — destructive actions, warnings
 
 ### Neutrals
-- **Parchment** `#F5F0E6` — light backgrounds, text on dark
-- **Charcoal** `#1A1A1A` — dark backgrounds
-- **Stone** `#4A4A4A` — secondary text, borders
+- **White** `#ffffff` — backgrounds
+- **Zinc 50** `#fafafa` — subtle backgrounds
+- **Zinc 100** `#f4f4f5` — muted backgrounds, hover states
+- **Zinc 400** `#a1a1aa` — muted text
+- **Zinc 900** `#18181b` — primary text
+
+### In-Game HUD
+The in-game HUD uses a dark theme for contrast against the game map:
+- **Zinc 950** `#09090b` — HUD panel backgrounds
+- **Zinc 900** `#18181b` — HUD surface elements
+- **Zinc 800** `#27272a` — HUD borders
 
 ## Typography
 
-### Fonts
-- **Headings**: Serif (Trajan Pro, Cinzel, or similar Roman-style)
-- **Body**: Same serif, lighter weight
+### Font
+- **Inter** — used throughout for a clean, readable experience
+- System fonts as fallback: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto`
 
 ### Hierarchy
-- Title/Logo: Large, uppercase, tracked out
-- Section headers: Uppercase, gold underline
-- Body: Sentence case, regular weight
+- Title/Logo: 4xl-5xl, font-bold, tracking-tight
+- Page headers: xl, font-semibold
+- Section headers: sm, font-medium
+- Body: Default size, normal weight
+
+### Text Style
+- Use sentence case for all text (not UPPERCASE)
+- Avoid excessive letter-spacing
+- Keep text concise and scannable
 
 ## UI Elements
 
 ### Buttons
-- Outlined style with thin gold borders
-- Transparent fill, slight fill on hover
-- Uppercase text, letter-spacing
-- Subtle glow or border-thicken on hover
-
-```
-┌─────────────┐     ┌─────────────┐
-│    PLAY     │  →  │░░░ PLAY ░░░│
-└─────────────┘     └─────────────┘
-    default              hover
-```
+- Rounded corners (8px default)
+- Solid fill for primary, outline for secondary
+- Sentence case labels
+- Smooth hover transitions
 
 ### Inputs
-- Thin bordered boxes
-- Gold border on focus
-- Placeholder text in muted stone color
+- Rounded borders
+- Indigo ring on focus
+- Placeholder text in muted color
 
-### Lists/Tables
-- Thin horizontal dividers
-- No heavy borders
-- Hover states with subtle gold tint
+### Cards & Panels
+- Subtle rounded corners
+- Thin borders
+- Light shadow optional
+
+### Tables
+- Clean horizontal dividers
+- Subtle hover states
+- Good whitespace between rows
 
 ## Interactions & Motion
 
 ### Principles
-- Smooth and fluid, never jarring
-- Ease-in-out curves (not linear)
-- Duration: 150-300ms for micro, 300-500ms for page transitions
+- Smooth and subtle, never jarring
+- Ease-in-out curves
+- Duration: 150-200ms for micro-interactions
 
 ### Transitions
-- Page changes: Fade or subtle slide
 - Hover states: 150ms ease
-- Modals: Fade in + slight scale up
+- Color changes: `transition-colors`
+- Modals: Fade in smoothly
 
 ### Feedback
-- Buttons: Immediate visual response
-- Actions: Brief gold flash/pulse on success
+- Buttons: Immediate visual response on hover/press
+- Use toast notifications for success/error states
 
 ## Spacing
 
 ### Scale
-Use consistent spacing multiples (e.g., 4px base):
-- Tight: 8px
-- Default: 16px
-- Loose: 32px
-- Section: 64px
+Use Tailwind's default spacing scale:
+- Tight: 2-4 (8-16px)
+- Default: 4-6 (16-24px)
+- Loose: 8+ (32px+)
 
 ### Layout
 - Generous whitespace
 - Content centered, max-width constrained
-- Breathing room around interactive elements
+- Consistent padding on containers (p-4)
 
-## Atmosphere
-
-### What to Avoid
-- Busy patterns or textures
-- Rounded corners (too friendly/modern)
-- Bright/saturated colors
-- Heavy drop shadows
+## Design Principles
 
 ### What to Embrace
-- Sharp corners or subtle bevels
-- Thin lines and borders
-- Uppercase for emphasis
-- Negative space as a design element
+- Rounded corners for a friendly feel
+- Ample whitespace
+- Clear visual hierarchy
+- Consistent component styling via shadcn
+
+### What to Avoid
+- Harsh, sharp corners everywhere
+- ALL CAPS text styling
+- Overly dark or dramatic colors
+- Cluttered layouts
+
+## In-Game UI
+
+The in-game HUD (stats bar, panels, modals) uses a dark theme to contrast with the game map:
+
+- Dark backgrounds (zinc-950, zinc-900)
+- Light text (white, zinc-100)
+- Indigo accent for primary actions
+- Rounded corners consistent with rest of app
+- Good contrast for readability

@@ -8,6 +8,8 @@ import { getNextAvailableColor } from './lib/colors';
 import type { Id } from './_generated/dataModel';
 import type { MutationCtx, QueryCtx } from './_generated/server';
 
+const START_COUNTDOWN_MS = 3_000;
+
 // Helper to leave current game before joining/creating another
 async function leaveCurrentGame(ctx: MutationCtx, userId: Id<'users'>) {
 	const existingPlayer = await ctx.db
@@ -116,6 +118,71 @@ async function getGameWithPlayers(ctx: QueryCtx, gameId: Id<'games'>) {
 		hostUsername: host?.username ?? 'Unknown',
 		players: playersWithUsers.sort((a, b) => a.joinedAt - b.joinedAt),
 	};
+}
+
+async function startGameFromLobby(ctx: MutationCtx, gameId: Id<'games'>) {
+	const game = await ctx.db.get(gameId);
+	if (!game) {
+		throw new Error('Game not found');
+	}
+	if (game.status !== 'starting') {
+		return;
+	}
+
+	const players = await ctx.db
+		.query('gamePlayers')
+		.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+		.collect();
+
+	if (players.length < 2) {
+		throw new Error('Need at least 2 players');
+	}
+
+	// Assign starting positions (shuffled)
+	const positions = Array.from({ length: players.length }, (_, i) => i);
+	for (let i = positions.length - 1; i > 0; i--) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[positions[i], positions[j]] = [positions[j], positions[i]];
+	}
+
+	await Promise.all(players.map((player, index) => ctx.db.patch(player._id, { startingPosition: positions[index] })));
+
+	// Generate map with player IDs in starting position order
+	const sortedPlayers = [...players].sort(
+		(a, b) => (positions[players.indexOf(a)] ?? 0) - (positions[players.indexOf(b)] ?? 0),
+	);
+	await ctx.runMutation(internal.tiles.generateMap, {
+		gameId,
+		playerIds: sortedPlayers.map((p) => p._id),
+	});
+
+	// Initialize player economy
+	for (const player of players) {
+		const capitalTile = await ctx.db
+			.query('tiles')
+			.withIndex('by_gameId', (q) => q.eq('gameId', gameId))
+			.filter((q) => q.and(q.eq(q.field('ownerId'), player._id), q.eq(q.field('type'), 'capital')))
+			.first();
+
+		await ctx.db.patch(player._id, {
+			gold: 0,
+			population: 20,
+			populationAccumulator: 0,
+			labourRatio: 100,
+			militaryRatio: 0,
+			spyRatio: 0,
+			rallyPointTileId: capitalTile?._id,
+		});
+	}
+
+	// Start tick system
+	await ctx.runMutation(internal.tick.startGameTick, { gameId });
+
+	await ctx.db.patch(gameId, {
+		status: 'inProgress',
+		startedAt: Date.now(),
+		startCountdownEndsAt: undefined,
+	});
 }
 
 // Queries
@@ -411,48 +478,32 @@ export const start = mutation({
 			throw new Error('Not all players ready');
 		}
 
-		// Assign starting positions (shuffled)
-		const positions = Array.from({ length: players.length }, (_, i) => i);
-		for (let i = positions.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[positions[i], positions[j]] = [positions[j], positions[i]];
-		}
-
-		await Promise.all(players.map((player, index) => ctx.db.patch(player._id, { startingPosition: positions[index] })));
-
+		const endsAt = Date.now() + START_COUNTDOWN_MS;
 		await ctx.db.patch(args.gameId, {
-			status: 'inProgress',
-			startedAt: Date.now(),
+			status: 'starting',
+			startCountdownEndsAt: endsAt,
 		});
 
-		// Generate map with player IDs in starting position order
-		const sortedPlayers = [...players].sort((a, b) => (positions[players.indexOf(a)] ?? 0) - (positions[players.indexOf(b)] ?? 0));
-		await ctx.runMutation(internal.tiles.generateMap, {
-			gameId: args.gameId,
-			playerIds: sortedPlayers.map((p) => p._id),
-		});
+		await ctx.scheduler.runAfter(START_COUNTDOWN_MS, internal.games.finalizeStart, { gameId: args.gameId });
+	},
+});
 
-		// Initialize player economy
-		for (const player of players) {
-			const capitalTile = await ctx.db
-				.query('tiles')
-				.withIndex('by_gameId', (q) => q.eq('gameId', args.gameId))
-				.filter((q) => q.and(q.eq(q.field('ownerId'), player._id), q.eq(q.field('type'), 'capital')))
-				.first();
-
-			await ctx.db.patch(player._id, {
-				gold: 0,
-				population: 20,
-				populationAccumulator: 0,
-				labourRatio: 100,
-				militaryRatio: 0,
-				spyRatio: 0,
-				rallyPointTileId: capitalTile?._id,
-			});
+export const finalizeStart = internalMutation({
+	args: { gameId: v.id('games') },
+	handler: async (ctx, { gameId }) => {
+		const game = await ctx.db.get(gameId);
+		if (!game || game.status !== 'starting') {
+			return;
 		}
 
-		// Start tick system
-		await ctx.runMutation(internal.tick.startGameTick, { gameId: args.gameId });
+		const endsAt = game.startCountdownEndsAt ?? 0;
+		const now = Date.now();
+		if (now < endsAt) {
+			await ctx.scheduler.runAfter(endsAt - now, internal.games.finalizeStart, { gameId });
+			return;
+		}
+
+		await startGameFromLobby(ctx, gameId);
 	},
 });
 

@@ -1,4 +1,3 @@
-import { IconArrowLeft, IconRefresh } from '@tabler/icons-react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useMutation, useQuery } from 'convex/react';
 
@@ -35,22 +34,18 @@ function LobbiesPage() {
 	};
 
 	return (
-		<div className='mx-auto max-w-4xl p-4'>
-			<div className='mb-6 flex items-center justify-between'>
-				<Link to='/' className='flex items-center gap-1 text-muted-foreground hover:text-foreground'>
-					<IconArrowLeft size={18} />
-					Back
-				</Link>
-				<h1 className='text-xl uppercase tracking-wider'>Find a Game</h1>
-				<div className='w-16' />
+		<div className='mx-auto max-w-4xl p-8'>
+			<div className='mb-8 text-center'>
+				<h1 className='mb-2 text-2xl uppercase tracking-wider'>Find a Game</h1>
+				<div className='mx-auto h-px w-24 bg-primary' />
 			</div>
 
 			{games === undefined ? (
 				<div className='py-8 text-center text-muted-foreground'>Loading...</div>
 			) : games.length === 0 ? (
-				<div className='border py-8 text-center text-muted-foreground'>No games available. Create one to get started!</div>
+				<div className='rounded-lg border py-8 text-center text-muted-foreground'>No games available. Create one to get started!</div>
 			) : (
-				<div className='border'>
+				<div className='rounded-lg border'>
 					<Table>
 						<TableHeader>
 							<TableRow>
@@ -67,7 +62,7 @@ function LobbiesPage() {
 									<TableRow
 										key={game._id}
 										onClick={isFull ? undefined : () => handleJoin(game._id)}
-										className={isFull ? 'opacity-50' : 'cursor-pointer hover:bg-primary/10'}
+										className={isFull ? 'opacity-50' : 'cursor-pointer hover:bg-muted'}
 									>
 										<TableCell>{game.name}</TableCell>
 										<TableCell>{game.hostUsername}</TableCell>
@@ -85,22 +80,8 @@ function LobbiesPage() {
 
 			<div className='mt-8 flex justify-center'>
 				<Link to='/lobbies/new'>
-					<Button className='w-32'>CREATE GAME</Button>
+					<Button>Create Game</Button>
 				</Link>
-			</div>
-
-			<div className='mt-6 flex justify-center'>
-				<Button
-					variant='ghost'
-					size='sm'
-					onClick={() => {
-						/* Convex auto-refreshes, but this is for UX */
-					}}
-					className='text-muted-foreground'
-				>
-					<IconRefresh size={16} className='mr-1' />
-					Refresh
-				</Button>
 			</div>
 		</div>
 	);
