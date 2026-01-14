@@ -8,13 +8,17 @@
 		"dev:convex": "convex dev",
 		"build": "tsc -b && vite build",
 		"lint": "biome check .",
-		"lint:fix": "biome check --write ."
+		"lint:fix": "biome check --write .",
+		"test": "vitest",
+		"test:types": "tsc --noEmit",
+		"deploy": "sh scripts/deploy.sh"
 	},
 	"dependencies": {
 		"@base-ui/react": "^1.0.0",
 		"@convex-dev/auth": "^0.0.90",
 		"@fontsource-variable/cinzel": "^5.2.8",
 		"@fontsource-variable/figtree": "^5.2.10",
+		"@fontsource-variable/jetbrains-mono": "^5.2.8",
 		"@react-three/drei": "^10.7.7",
 		"@react-three/fiber": "^9.5.0",
 		"@tabler/icons-react": "^3.36.0",
