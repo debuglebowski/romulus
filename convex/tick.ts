@@ -24,7 +24,7 @@ import { getUpgradeModifiers } from './upgrades';
 
 import type { Id } from './_generated/dataModel';
 
-const TICK_INTERVAL_MS = 750; // 0.75 seconds per tick (1.33x speed)
+const TICK_INTERVAL_MS = 10000; // 10 seconds per tick
 
 function randomRange(min: number, max: number): number {
 	return Math.random() * (max - min) + min;
